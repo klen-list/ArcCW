@@ -859,7 +859,7 @@ if CLIENT and not isSingleplayer then
     end
 else
     function SWEP:GetState()
-        self.dt.NWState
+        return self.dt.NWState
     end
 
     function SWEP:SetState(state)
