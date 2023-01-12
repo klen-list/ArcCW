@@ -133,113 +133,165 @@ function SWEP:InitialDefaultClip()
     end
 end
 
-function SWEP:Initialize()
-    if (!IsValid(self:GetOwner()) or self:GetOwner():IsNPC()) and self:IsValid() and self.NPC_Initialize and SERVER then
-        self:NPC_Initialize()
-    end
+do
+    local _R = debug.getregistry()
+    local ENTITY = _R.Entity
+    local entityGetOwner = ENTITY.GetOwner
 
-    if game.SinglePlayer() and self:GetOwner():IsValid() and SERVER then
-        self:CallOnClient("Initialize")
-    end
+    local METATABLE = table.Copy(_R.Weapon)
+    table.Merge(METATABLE, ENTITY)
 
-    if CLIENT then
-        local class = self:GetClass()
-
-        if self.KillIconAlias then
-            killicon.AddAlias(class, self.KillIconAlias)
-            class = self.KillIconAlias
-        end
-
-        local path = "arccw/weaponicons/" .. class
-        local mat = Material(path)
-
-        if !mat:IsError() then
-
-            local tex = mat:GetTexture("$basetexture")
-            if tex then
-                local texpath = tex:GetName()
-                killicon.Add(class, texpath, Color(255, 255, 255))
-                self.WepSelectIcon = surface.GetTextureID(texpath)
-
-                if self.ShootEntity then
-                killicon.Add(self.ShootEntity, texpath, Color(255, 255, 255))
-                end
-            end
-        end
-
-        -- Check for incompatibile addons once 
-        if LocalPlayer().ArcCW_IncompatibilityCheck != true and game.SinglePlayer() then
-            LocalPlayer().ArcCW_IncompatibilityCheck = true
-
-            local incompatList = {}
-            local addons = engine.GetAddons()
-            for _, addon in pairs(addons) do
-                if ArcCW.IncompatibleAddons[tostring(addon.wsid)] and addon.mounted then
-                    incompatList[tostring(addon.wsid)] = addon
-                end
-            end
-
-            local predrawvmhooks = hook.GetTable().PreDrawViewModel
-            if predrawvmhooks and (predrawvmhooks.DisplayDistancePlaneLS or predrawvmhooks.DisplayDistancePlane) then -- vtools lua breaks arccw with stupid return in vm hook, ya dont need it if you going to play with guns
-                hook.Remove("PreDrawViewModel", "DisplayDistancePlane")
-                hook.Remove("PreDrawViewModel", "DisplayDistancePlaneLS")
-                incompatList["DisplayDistancePlane"] = {
-                    title = "Light Sprayer / Scenic Dispenser tool",
-                    wsid = "DisplayDistancePlane",
-                    nourl = true,
-                }
-            end
-            local shouldDo = true
-            -- If never show again is on, verify we have no new addons
-            if file.Exists("arccw_incompatible.txt", "DATA") then
-                shouldDo = false
-                local oldTbl = util.JSONToTable(file.Read("arccw_incompatible.txt"))
-                for id, addon in pairs(incompatList) do
-                    if !oldTbl[id] then shouldDo = true break end
-                end
-                if shouldDo then file.Delete("arccw_incompatible.txt") end
-            end
-            if shouldDo and !table.IsEmpty(incompatList) then
-                ArcCW.MakeIncompatibleWindow(incompatList)
-            elseif !table.IsEmpty(incompatList) then
-                print("ArcCW ignored " .. table.Count(incompatList) .. " incompatible addons. If things break, it's your fault.")
-            end
+    for k, v in pairs(METATABLE) do
+        if isstring(k) and string.sub(k, 1, 2) == "__" then
+            METATABLE[k] = nil
         end
     end
 
-    if GetConVar("arccw_equipmentsingleton"):GetBool() and self.Throwing then
-        self.Singleton = true
-        self.Primary.ClipSize = -1
-        self.Primary.Ammo = ""
+    METATABLE.__index = METATABLE
+
+    local copyKeys = {"MetaID","MetaName","__tostring","__eq","__concat"}
+    local copyKeysLength = #copyKeys
+
+    local function CopyMetatable(ent)
+        local tab = ent:GetTable()
+        setmetatable(tab, METATABLE)
+
+
+
+        local mt = {
+            __index = function(self, key)
+                -- we still have to take care of these idiots
+                if key == "Owner" then
+                    return entityGetOwner(self, key)
+                end
+
+                return tab[key]
+            end,  
+            __newindex = tab, 
+            __metatable = ENTITY
+        }
+
+        for i = 1, copyKeysLength do
+            local v = copyKeys[i]
+            mt[v] = ENTITY[v]
+        end
+
+        debug.setmetatable(ent, mt)
     end
 
-    self:SetState(0)
-    self:SetClip2(0)
-    self:SetLastLoad(self:Clip1())
+    function SWEP:Initialize()
+        local owner = self:GetOwner()
+    
+        if (!IsValid(sowner) or sowner:IsNPC()) and self:IsValid() and self.NPC_Initialize and SERVER then
+            self:NPC_Initialize()
+        end
+    
+        if game.SinglePlayer() and sowner:IsValid() and SERVER then
+            self:CallOnClient("Initialize")
+        end
+    
+        if CLIENT then
+            local class = self:GetClass()
+    
+            if self.KillIconAlias then
+                killicon.AddAlias(class, self.KillIconAlias)
+                class = self.KillIconAlias
+            end
+    
+            local path = "arccw/weaponicons/" .. class
+            local mat = Material(path)
+    
+            if !mat:IsError() then
+    
+                local tex = mat:GetTexture("$basetexture")
+                if tex then
+                    local texpath = tex:GetName()
+                    killicon.Add(class, texpath, Color(255, 255, 255))
+                    self.WepSelectIcon = surface.GetTextureID(texpath)
+    
+                    if self.ShootEntity then
+                    killicon.Add(self.ShootEntity, texpath, Color(255, 255, 255))
+                    end
+                end
+            end
+    
+            -- Check for incompatibile addons once 
+            if LocalPlayer().ArcCW_IncompatibilityCheck != true and game.SinglePlayer() then
+                LocalPlayer().ArcCW_IncompatibilityCheck = true
+    
+                local incompatList = {}
+                local addons = engine.GetAddons()
+                for _, addon in pairs(addons) do
+                    if ArcCW.IncompatibleAddons[tostring(addon.wsid)] and addon.mounted then
+                        incompatList[tostring(addon.wsid)] = addon
+                    end
+                end
+    
+                local predrawvmhooks = hook.GetTable().PreDrawViewModel
+                if predrawvmhooks and (predrawvmhooks.DisplayDistancePlaneLS or predrawvmhooks.DisplayDistancePlane) then -- vtools lua breaks arccw with stupid return in vm hook, ya dont need it if you going to play with guns
+                    hook.Remove("PreDrawViewModel", "DisplayDistancePlane")
+                    hook.Remove("PreDrawViewModel", "DisplayDistancePlaneLS")
+                    incompatList["DisplayDistancePlane"] = {
+                        title = "Light Sprayer / Scenic Dispenser tool",
+                        wsid = "DisplayDistancePlane",
+                        nourl = true,
+                    }
+                end
+                local shouldDo = true
+                -- If never show again is on, verify we have no new addons
+                if file.Exists("arccw_incompatible.txt", "DATA") then
+                    shouldDo = false
+                    local oldTbl = util.JSONToTable(file.Read("arccw_incompatible.txt"))
+                    for id, addon in pairs(incompatList) do
+                        if !oldTbl[id] then shouldDo = true break end
+                    end
+                    if shouldDo then file.Delete("arccw_incompatible.txt") end
+                end
+                if shouldDo and !table.IsEmpty(incompatList) then
+                    ArcCW.MakeIncompatibleWindow(incompatList)
+                elseif !table.IsEmpty(incompatList) then
+                    print("ArcCW ignored " .. table.Count(incompatList) .. " incompatible addons. If things break, it's your fault.")
+                end
+            end
+    
+        end
+    
+        if GetConVar("arccw_equipmentsingleton"):GetBool() and self.Throwing then
+            self.Singleton = true
+            self.Primary.ClipSize = -1
+            self.Primary.Ammo = ""
+        end
+    
+        self:SetState(0)
+        self:SetClip2(0)
+        self:SetLastLoad(self:Clip1())
+    
+        self.Attachments["BaseClass"] = nil
+    
+        if !self:GetOwner():IsNPC() then
+            self:SetHoldType(self.HoldtypeActive)
+        end
+    
+        local og = weapons.Get(self:GetClass())
+    
+        self.RegularClipSize = og.Primary.ClipSize
+    
+        self.OldPrintName = self.PrintName
+    
+        self:InitTimers()
+    
+        if engine.ActiveGamemode() == "terrortown" then
+            self:TTT_Init()
+        end
+    
+        hook.Run("ArcCW_WeaponInit", self)
+    
+        self:AdjustAtts()
 
-    self.Attachments["BaseClass"] = nil
-
-    if !self:GetOwner():IsNPC() then
-        self:SetHoldType(self.HoldtypeActive)
-    end
-
-    local og = weapons.Get(self:GetClass())
-
-    self.RegularClipSize = og.Primary.ClipSize
-
-    self.OldPrintName = self.PrintName
-
-    self:InitTimers()
-
-    if engine.ActiveGamemode() == "terrortown" then
-        self:TTT_Init()
-    end
-
-    hook.Run("ArcCW_WeaponInit", self)
-
-    self:AdjustAtts()
+        CopyMetatable(self)
+    
+    end    
 end
-
 function SWEP:Holster(wep)
     if !IsFirstTimePredicted() then return end
     if self:GetOwner():IsNPC() then return end
