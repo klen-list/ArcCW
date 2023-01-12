@@ -2,6 +2,8 @@ if CLIENT then
     ArcCW.LastWeapon = nil
 end
 
+local isSingleplayer = game.SinglePlayer()
+
 local vec1 = Vector(1, 1, 1)
 local vec0 = vec1 * 0
 local ang0 = Angle(0, 0, 0)
@@ -36,7 +38,7 @@ function SWEP:Think()
         end
     end
 
-    if CLIENT and (!game.SinglePlayer() and IsFirstTimePredicted() or true)
+    if CLIENT and (!isSingleplayer and IsFirstTimePredicted() or true)
             and owner == LocalPlayer() and ArcCW.InvHUD
             and !ArcCW.Inv_Hidden and ArcCW.Inv_Fade == 0 then
         ArcCW.InvHUD:Remove()
@@ -69,7 +71,7 @@ function SWEP:Think()
         end
     end
 
-    if self:GetGrenadePrimed() and !(owner:KeyDown(IN_ATTACK) or owner:KeyDown(IN_ATTACK2)) and (!game.SinglePlayer() or SERVER) then
+    if self:GetGrenadePrimed() and !(owner:KeyDown(IN_ATTACK) or owner:KeyDown(IN_ATTACK2)) and (!isSingleplayer or SERVER) then
         self:Throw()
     end
 
@@ -78,7 +80,7 @@ function SWEP:Think()
 
         local ft = self:GetBuff_Override("Override_FuseTime") or self.FuseTime
 
-        if ft and (heldtime >= ft) and (!game.SinglePlayer() or SERVER) then
+        if ft and (heldtime >= ft) and (!isSingleplayer or SERVER) then
             self:Throw()
         end
     end
@@ -91,7 +93,7 @@ function SWEP:Think()
         end
     end
 
-    if ((game.SinglePlayer() and SERVER) or (!game.SinglePlayer() and true)) and self:GetBuff_Override("Override_TriggerDelay", self.TriggerDelay) then
+    if ((isSingleplayer and SERVER) or (!isSingleplayer and true)) and self:GetBuff_Override("Override_TriggerDelay", self.TriggerDelay) then
         if owner:KeyReleased(IN_ATTACK) and self:GetBuff_Override("Override_TriggerCharge", self.TriggerCharge) and self:GetTriggerDelta(true) >= 1 then
             self:PrimaryAttack()
         else
@@ -101,7 +103,7 @@ function SWEP:Think()
 
     if self:GetCurrentFiremode().RunawayBurst then
 
-        if self:GetBurstCount() > 0 and ((game.SinglePlayer() and SERVER) or (!game.SinglePlayer() and true)) then
+        if self:GetBurstCount() > 0 and ((isSingleplayer and SERVER) or (!isSingleplayer and true)) then
             self:PrimaryAttack()
         end
 
@@ -149,7 +151,7 @@ function SWEP:Think()
         local sighted = self:GetState() == ArcCW.STATE_SIGHTS
         local toggle = owner:GetInfoNum("arccw_toggleads", 0) >= 1
         local suitzoom = owner:KeyDown(IN_ZOOM)
-        local sp_cl = game.SinglePlayer() and CLIENT
+        local sp_cl = isSingleplayer and CLIENT
 
         -- if in singleplayer, client realm should be completely ignored
         if toggle and !sp_cl then
@@ -172,7 +174,7 @@ function SWEP:Think()
 
     end
 
-    if (!game.SinglePlayer() and IsFirstTimePredicted()) or (game.SinglePlayer() and true) then
+    if (!isSingleplayer and IsFirstTimePredicted()) or (isSingleplayer and true) then
         if self:InSprint() and (self:GetState() != ArcCW.STATE_SPRINT) then
             self:EnterSprint()
         elseif !self:InSprint() and (self:GetState() == ArcCW.STATE_SPRINT) then
@@ -180,12 +182,12 @@ function SWEP:Think()
         end
     end
 
-    if game.SinglePlayer() or IsFirstTimePredicted() then
+    if isSingleplayer or IsFirstTimePredicted() then
         self:SetSightDelta(math.Approach(self:GetSightDelta(), self:GetState() == ArcCW.STATE_SIGHTS and 0 or 1, FrameTime() / self:GetSightTime()))
         self:SetSprintDelta(math.Approach(self:GetSprintDelta(), self:GetState() == ArcCW.STATE_SPRINT and 1 or 0, FrameTime() / self:GetSprintTime()))
     end
 
-    if CLIENT and (game.SinglePlayer() or IsFirstTimePredicted()) then
+    if CLIENT and (isSingleplayer or IsFirstTimePredicted()) then
         self:ProcessRecoil()
     end
 
@@ -300,7 +302,7 @@ function SWEP:Think()
     self:GetBuff_Hook("Hook_Think")
 
     -- Running this only serverside in SP breaks animation processing and causes CheckpointAnimation to !reset.
-    --if SERVER or !game.SinglePlayer() then
+    --if SERVER or !isSingleplayer then
         self:ProcessTimers()
     --end
 
