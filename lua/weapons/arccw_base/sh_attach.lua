@@ -314,14 +314,17 @@ do
                     winningslot = i
                 end
             end
-    
-            local toggleNumStats = atttbl.ToggleStats[k.ToggleNum]
-            if atttbl.ToggleStats and k.ToggleNum and toggleNumStats and toggleNumStats[buff] then
-                local pri = toggleNumStats[buffConcPriority] or 1
-                if level == 0 or (pri > level) then
-                    current = toggleNumStats[buff]
-                    level = pri
-                    winningslot = i
+
+            if atttbl.ToggleStats and k.ToggleNum then
+                local toggleNumStats = atttbl.ToggleStats[k.ToggleNum]
+
+                if toggleNumStats and toggleNumStats[buff] then
+                    local pri = toggleNumStats[buffConcPriority] or 1
+                    if level == 0 or (pri > level) then
+                        current = toggleNumStats[buff]
+                        level = pri
+                        winningslot = i
+                    end
                 end
             end
         end
