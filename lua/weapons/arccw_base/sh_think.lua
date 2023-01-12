@@ -2,6 +2,8 @@ if CLIENT then
     ArcCW.LastWeapon = nil
 end
 
+local isSingleplayer = game.SinglePlayer()
+
 local vec1 = Vector(1, 1, 1)
 local vec0 = vec1 * 0
 local ang0 = Angle(0, 0, 0)
@@ -11,16 +13,20 @@ function SWEP:Think()
     local now = CurTime()
     local owner = self:GetOwner()
 
-    if IsValid(owner) and self:GetClass() == "arccw_base" then
+    local isValidOwner = owner:IsValid()
+    if isValidOwner and self:GetClass() == "arccw_base" then
         self:Remove()
         return
     end
 
-    if !IsValid(owner) or owner:IsNPC() then return end
+    if not isValidOwner or owner:IsNPC() then return end
+    local isFirstTimePredicted = IsFirstTimePredicted()
 
     if self:GetState() == ArcCW.STATE_DISABLE and !self:GetPriorityAnim() then
         self:SetState(ArcCW.STATE_IDLE)
     end
+
+    local swepDt = self.dt
 
     for i, v in ipairs(self.EventTable) do
         for ed, bz in pairs(v) do
@@ -36,9 +42,7 @@ function SWEP:Think()
         end
     end
 
-    if CLIENT and (!game.SinglePlayer() and IsFirstTimePredicted() or true)
-            and owner == LocalPlayer() and ArcCW.InvHUD
-            and !ArcCW.Inv_Hidden and ArcCW.Inv_Fade == 0 then
+    if CLIENT and owner == LocalPlayer() and ArcCW.InvHUD and !ArcCW.Inv_Hidden and ArcCW.Inv_Fade == 0 then
         ArcCW.InvHUD:Remove()
         ArcCW.Inv_Fade = 0.01
     end
@@ -47,16 +51,16 @@ function SWEP:Think()
 
     self.BurstCount = self:GetBurstCount()
 
-    local sg = self:GetShotgunReloading()
+    local sg = swepDt.ShotgunReloading
     if (sg == 2 or sg == 4) and owner:KeyPressed(IN_ATTACK) then
         self:SetShotgunReloading(sg + 1)
-    elseif (sg >= 2) and self:GetReloadingREAL() <= now then
-        self:ReloadInsert((sg >= 4) and true or false)
+    elseif (sg >= 2) and swepDt.ReloadingREAL <= now then
+        self:ReloadInsert(sg >= 4)
     end
 
     self:InBipod()
 
-    if self:GetNeedCycle() and !self.Throwing and !self:GetReloading() and self:GetWeaponOpDelay() < now and self:GetNextPrimaryFire() < now and -- Adding this delays bolting if the RPM is too low, but removing it may reintroduce the double pump bug. Increasing the RPM allows you to shoot twice on many multiplayer servers. Sure would be convenient if everything just worked nicely
+    if swepDt.NeedCycle and !self.Throwing and !self:GetReloading() and swepDt.WeaponOpDelay < now and self:GetNextPrimaryFire() < now and -- Adding this delays bolting if the RPM is too low, but removing it may reintroduce the double pump bug. Increasing the RPM allows you to shoot twice on many multiplayer servers. Sure would be convenient if everything just worked nicely
             (!GetConVar("arccw_clicktocycle"):GetBool() and (self:GetCurrentFiremode().Mode == 2 or !owner:KeyDown(IN_ATTACK))
             or GetConVar("arccw_clicktocycle"):GetBool() and (self:GetCurrentFiremode().Mode == 2 or owner:KeyPressed(IN_ATTACK))) then
         local anim = self:SelectAnimation("cycle")
@@ -69,21 +73,21 @@ function SWEP:Think()
         end
     end
 
-    if self:GetGrenadePrimed() and !(owner:KeyDown(IN_ATTACK) or owner:KeyDown(IN_ATTACK2)) and (!game.SinglePlayer() or SERVER) then
+    if swepDt.GrenadePrimed and !(owner:KeyDown(IN_ATTACK) or owner:KeyDown(IN_ATTACK2)) and (!isSingleplayer or SERVER) then
         self:Throw()
     end
 
-    if self:GetGrenadePrimed() and self.GrenadePrimeTime > 0 and self.isCooked then
+    if swepDt.GrenadePrimed and self.GrenadePrimeTime > 0 and self.isCooked then
         local heldtime = (now - self.GrenadePrimeTime)
 
         local ft = self:GetBuff_Override("Override_FuseTime") or self.FuseTime
 
-        if ft and (heldtime >= ft) and (!game.SinglePlayer() or SERVER) then
+        if ft and (heldtime >= ft) and (!isSingleplayer or SERVER) then
             self:Throw()
         end
     end
 
-    if IsFirstTimePredicted() and self:GetNextPrimaryFire() < now and owner:KeyReleased(IN_USE) then
+    if isFirstTimePredicted and self:GetNextPrimaryFire() < now and owner:KeyReleased(IN_USE) then
         if self:InBipod() then
             self:ExitBipod()
         else
@@ -91,7 +95,7 @@ function SWEP:Think()
         end
     end
 
-    if ((game.SinglePlayer() and SERVER) or (!game.SinglePlayer() and true)) and self:GetBuff_Override("Override_TriggerDelay", self.TriggerDelay) then
+    if ((isSingleplayer and SERVER) or (!isSingleplayer and true)) and self:GetBuff_Override("Override_TriggerDelay", self.TriggerDelay) then
         if owner:KeyReleased(IN_ATTACK) and self:GetBuff_Override("Override_TriggerCharge", self.TriggerCharge) and self:GetTriggerDelta(true) >= 1 then
             self:PrimaryAttack()
         else
@@ -101,7 +105,7 @@ function SWEP:Think()
 
     if self:GetCurrentFiremode().RunawayBurst then
 
-        if self:GetBurstCount() > 0 and ((game.SinglePlayer() and SERVER) or (!game.SinglePlayer() and true)) then
+        if self:GetBurstCount() > 0 and ((isSingleplayer and SERVER) or (!isSingleplayer and true)) then
             self:PrimaryAttack()
         end
 
@@ -149,7 +153,7 @@ function SWEP:Think()
         local sighted = self:GetState() == ArcCW.STATE_SIGHTS
         local toggle = owner:GetInfoNum("arccw_toggleads", 0) >= 1
         local suitzoom = owner:KeyDown(IN_ZOOM)
-        local sp_cl = game.SinglePlayer() and CLIENT
+        local sp_cl = isSingleplayer and CLIENT
 
         -- if in singleplayer, client realm should be completely ignored
         if toggle and !sp_cl then
@@ -172,7 +176,7 @@ function SWEP:Think()
 
     end
 
-    if (!game.SinglePlayer() and IsFirstTimePredicted()) or (game.SinglePlayer() and true) then
+    if (!isSingleplayer and isFirstTimePredicted) or (isSingleplayer and true) then
         if self:InSprint() and (self:GetState() != ArcCW.STATE_SPRINT) then
             self:EnterSprint()
         elseif !self:InSprint() and (self:GetState() == ArcCW.STATE_SPRINT) then
@@ -180,12 +184,14 @@ function SWEP:Think()
         end
     end
 
-    if game.SinglePlayer() or IsFirstTimePredicted() then
+    local spOrFirstTimePredicted = isSingleplayer or isFirstTimePredicted
+
+    if spOrFirstTimePredicted then
         self:SetSightDelta(math.Approach(self:GetSightDelta(), self:GetState() == ArcCW.STATE_SIGHTS and 0 or 1, FrameTime() / self:GetSightTime()))
         self:SetSprintDelta(math.Approach(self:GetSprintDelta(), self:GetState() == ArcCW.STATE_SPRINT and 1 or 0, FrameTime() / self:GetSprintTime()))
     end
 
-    if CLIENT and (game.SinglePlayer() or IsFirstTimePredicted()) then
+    if CLIENT and (spOrFirstTimePredicted) then
         self:ProcessRecoil()
     end
 
@@ -279,7 +285,7 @@ function SWEP:Think()
 
     -- self:RefreshBGs()
 
-    if self:GetMagUpIn() != 0 and now > self:GetMagUpIn() then
+    if swepDt.MagUpIn != 0 and now > swepDt.MagUpIn then
         self:ReloadTimed()
         self:SetMagUpIn( 0 )
     end
@@ -300,18 +306,18 @@ function SWEP:Think()
     self:GetBuff_Hook("Hook_Think")
 
     -- Running this only serverside in SP breaks animation processing and causes CheckpointAnimation to !reset.
-    --if SERVER or !game.SinglePlayer() then
+    --if SERVER or !isSingleplayer then
         self:ProcessTimers()
     --end
 
     -- Only reset to idle if we don't need cycle. empty idle animation usually doesn't play nice
-    if self:GetNextIdle() != 0 and self:GetNextIdle() <= now and !self:GetNeedCycle()
-            and self:GetHolster_Time() == 0 and self:GetShotgunReloading() == 0 then
+    if swepDt.NextIdle != 0 and swepDt.NextIdle <= now and !self:GetNeedCycle()
+            and self:GetHolster_Time() == 0 and swepDt.ShotgunReloading == 0 then
         self:SetNextIdle(0)
         self:PlayIdleAnimation(true)
     end
 
-    if self:GetUBGLDebounce() and !owner:KeyDown(IN_RELOAD) then
+    if swepDt.UBGLDebounce and !owner:KeyDown(IN_RELOAD) then
         self:SetUBGLDebounce( false )
     end
 end

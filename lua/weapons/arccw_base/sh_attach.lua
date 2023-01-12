@@ -146,64 +146,94 @@ function SWEP:GetBuff_Stat(buff, slot)
     end
 end
 
-function SWEP:GetBuff_Hook(buff, data, defaultnil)
-    -- call through hook function, args = data. return nil to do nothing. return false to prevent thing from happening.
+do
+    local function sortBuffHooks(a, b)
+        return a[2] >= b[2]
+    end
 
-    if !self.AttCache_Hooks[buff] then
-        self.AttCache_Hooks[buff] = {}
+    local functionMeta = {MetaName = 'function'}
+    debug.setmetatable(function() end, functionMeta)
 
-        for i, k in pairs(self.Attachments) do
-            if !k.Installed then continue end
+    local getmetatable = getmetatable
+    local function isfunction(val)
+        return getmetatable(val) == functionMeta
+    end
 
-            local atttbl = ArcCW.AttachmentTable[k.Installed]
+    function SWEP:GetBuff_Hook(buff, data, defaultnil)
+        -- call through hook function, args = data. return nil to do nothing. return false to prevent thing from happening.
+        -- uuugghh
+        local buffConcPriority = buff .. "_Priority"
+        if !self.AttCache_Hooks[buff] then
+            -- self.AttCache_Hooks[buff] = {}
+            local buffHooks = {}
+            local buffHooksLen = 0
 
-            if !atttbl then continue end
+            self.AttCache_Hooks[buff] = buffHooks
 
-            if isfunction(atttbl[buff]) then
-                table.insert(self.AttCache_Hooks[buff], {atttbl[buff], atttbl[buff .. "_Priority"] or 0})
-            elseif atttbl.ToggleStats and k.ToggleNum and atttbl.ToggleStats[k.ToggleNum] and isfunction(atttbl.ToggleStats[k.ToggleNum][buff]) then
-                table.insert(self.AttCache_Hooks[buff], {atttbl.ToggleStats[k.ToggleNum][buff], atttbl.ToggleStats[k.ToggleNum][buff .. "_Priority"] or 0})
+            for i, k in ipairs(self.Attachments) do
+                if !k.Installed then continue end
+
+                local atttbl = ArcCW.AttachmentTable[k.Installed]
+
+                if !atttbl then continue end
+                local tblBuff = atttbl[buff]
+
+                local toggleNumStats = atttbl.ToggleStats[k.ToggleNum]
+
+                if isfunction(tblBuff) then
+                    buffHooksLen = buffHooksLen + 1
+                    buffHooks[buffHooksLen] = {tblBuff, atttbl[buffConcPriority] or 0}
+                elseif atttbl.ToggleStats and k.ToggleNum and toggleNumStats and isfunction(toggleNumStats[buff]) then
+                    buffHooksLen = buffHooksLen + 1
+                    buffHooks[buffHooksLen] = {toggleNumStats[buff], toggleNumStats[buffConcPriority] or 0}
+                end
+            end
+
+            local cfm = self:GetCurrentFiremode()
+    
+            if cfm and isfunction(cfm[buff]) then
+                buffHooksLen = buffHooksLen + 1
+                buffHooks[buffHooksLen] = {cfm[buff], cfm[buffConcPriority] or 0}
+            end
+
+            local attachmentElements = self.AttachmentElements
+            for i, e in ipairs(self:GetActiveElements()) do
+                local ele = attachmentElements[e]
+    
+                if ele and ele[buff] then
+                    buffHooksLen = buffHooksLen + 1
+                    buffHooks[buffHooksLen] = {ele[buff], ele[buffConcPriority] or 0}
+                end
+            end
+
+            if isfunction(self[buff]) then
+                buffHooksLen = buffHooksLen + 1
+                buffHooks[buffHooksLen] = {self[buff], self[buffConcPriority] or 0}
+            end
+
+            table.sort(buffHooks, sortBuffHooks)
+        end
+
+        local retvalue = nil
+        local hooks = self.AttCache_Hooks[buff]
+        for i = 1, #hooks do
+            local ret = hooks[i][1](self, data)
+            if ret == false then
+                return
+            elseif ret != nil then
+                retvalue = ret
+                break
             end
         end
 
-        local cfm = self:GetCurrentFiremode()
-
-        if cfm and isfunction(cfm[buff]) then
-            table.insert(self.AttCache_Hooks[buff], {cfm[buff], cfm[buff .. "_Priority"] or 0})
+        if retvalue then 
+            data = retvalue
+        elseif defaultnil then 
+            data = nil 
         end
 
-        for i, e in pairs(self:GetActiveElements()) do
-            local ele = self.AttachmentElements[e]
-
-            if ele and ele[buff] then
-                table.insert(self.AttCache_Hooks[buff], {ele[buff], ele[buff .. "_Priority"] or 0})
-            end
-        end
-
-        if isfunction(self:GetTable()[buff]) then
-            table.insert(self.AttCache_Hooks[buff], {self:GetTable()[buff], self:GetTable()[buff .. "_Priority"] or 0})
-        end
-
-        table.sort(self.AttCache_Hooks[buff], function(a, b) return a[2] >= b[2] end)shouldsort = true
+        return hook.Call(buff, nil, self, data) or data
     end
-
-    local retvalue = nil
-    for i, k in ipairs(self.AttCache_Hooks[buff]) do
-        local ret = k[1](self, data)
-        if ret == false then
-            return
-        elseif ret != nil then
-            retvalue = ret
-            break
-        end
-    end
-
-    if retvalue then data = retvalue
-    elseif defaultnil then data = nil end
-
-    data = hook.Call(buff, nil, self, data) or data
-
-    return data
 end
 
 function SWEP:GetBuff_Override(buff, default)
