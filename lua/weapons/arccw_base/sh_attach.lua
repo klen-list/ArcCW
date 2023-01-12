@@ -409,7 +409,6 @@ do
 
     function SWEP:GetBuff_Mult(buff)
         local mult = 1
-        local multCvar = cvarGetFloat(GetConVar(ArcCW.ConVar_BuffMults[buff]))
 
         if MODIFIED_CACHE and !self.ModifiedCache[buff] then
             if !ArcCW.BuffStack then
@@ -419,9 +418,9 @@ do
             end
             if ArcCW.ConVar_BuffMults[buff] then
                 if buff == "Mult_CycleTime" then
-                    mult = mult / multCvar
+                    mult = mult / cvarGetFloat(GetConVar(ArcCW.ConVar_BuffMults[buff]))
                 else
-                    mult = mult * multCvar
+                    mult = mult * cvarGetFloat(GetConVar(ArcCW.ConVar_BuffMults[buff]))
                 end
             end
             return mult
@@ -443,9 +442,9 @@ do
 
             if ArcCW.ConVar_BuffMults[buff] then
                 if buff == "Mult_CycleTime" then
-                    mult = mult / multCvar
+                    mult = mult / cvarGetFloat(GetConVar(ArcCW.ConVar_BuffMults[buff]))
                 else
-                    mult = mult * multCvar
+                    mult = mult * cvarGetFloat(GetConVar(ArcCW.ConVar_BuffMults[buff]))
                 end
             end
 
@@ -522,7 +521,6 @@ do
 
     function SWEP:GetBuff_Add(buff)
         local add = 0
-        local addCvarValue = cvarGetFloat(GetConVar(ArcCW.ConVar_BuffAdds[buff]))
 
         if MODIFIED_CACHE and !self.ModifiedCache[buff] then
             if !ArcCW.BuffStack then
@@ -535,7 +533,7 @@ do
                 ArcCW.BuffStack = false
             end
             if ArcCW.ConVar_BuffAdds[buff] then
-                add = add + addCvarValue
+                add = add + cvarGetFloat(GetConVar(ArcCW.ConVar_BuffAdds[buff]))
             end
             return add
         end
@@ -553,7 +551,7 @@ do
             end
 
             if ArcCW.ConVar_BuffAdds[buff] then
-                add = add + addCvarValue
+                add = add + cvarGetFloat(GetConVar(ArcCW.ConVar_BuffAdds[buff]))
             end
 
             return add
@@ -595,7 +593,7 @@ do
         end
 
         if ArcCW.ConVar_BuffAdds[buff] then
-            add = add + addCvarValue
+            add = add + cvarGetFloat(GetConVar(ArcCW.ConVar_BuffAdds[buff]))
         end
 
         if !ArcCW.BuffStack then
@@ -621,14 +619,16 @@ function SWEP:GetActiveElements(recache)
     local elesLen = 0
 
     for _, i in ipairs(self.Attachments) do
-        local defaultEles = i.DefaultEles
-        if !i.Installed and defaultEles then
-            local defaultElesLen = #defaultEles
-
-            for i = 1, defaultElesLen do
-                eles[elesLen + i] = defaultEles[i]
+        if !i.Installed then
+            local defaultEles = i.DefaultEles
+            if defaultEles then                
+                local defaultElesLen = #defaultEles
+    
+                for i = 1, defaultElesLen do
+                    eles[elesLen + i] = defaultEles[i]
+                end
+                elesLen = elesLen + defaultElesLen
             end
-            elesLen = elesLen + defaultElesLen
             continue
         end
 
