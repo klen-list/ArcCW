@@ -151,10 +151,15 @@ do
         return a[2] >= b[2]
     end
 
-    local functionMeta = {MetaName = 'function'}
-    debug.setmetatable(function() end, functionMeta)
-
+    local blank = function() end
     local getmetatable = getmetatable
+
+    local functionMeta = getmetatable(blank)
+    if not functionMeta then
+        functionMeta = {MetaName = 'function'}
+        debug.setmetatable(blank, functionMeta)
+    end
+
     local function isfunction(val)
         return getmetatable(val) == functionMeta
     end
@@ -236,364 +241,374 @@ do
     end
 end
 
-function SWEP:GetBuff_Override(buff, default)
+do
+    -- to be modified
+    local overrideData = {
+        buff = true,
+        current = true,
+        winningslot = true
+    }
 
-    local level = 0
-    local current = nil
-    local winningslot = nil
-
-    if MODIFIED_CACHE and !self.ModifiedCache[buff] then
-        -- ArcCW.ConVar_BuffOverrides[buff] isn't actually implemented??
-
-        if !ArcCW.BuffStack then
-            ArcCW.BuffStack = true
-            local out = (self:GetBuff_Hook("O_Hook_" .. buff, {buff = buff}) or {})
-            current = out.current or current
-            winningslot = out.winningslot or winningslot
-            ArcCW.BuffStack = false
+    function SWEP:GetBuff_Override(buff, default)
+    
+        local level = 0
+        local current = nil
+        local winningslot = nil
+    
+        if MODIFIED_CACHE and !self.ModifiedCache[buff] then
+            -- ArcCW.ConVar_BuffOverrides[buff] isn't actually implemented??
+    
+            if !ArcCW.BuffStack then
+                ArcCW.BuffStack = true
+                local out = (self:GetBuff_Hook("O_Hook_" .. buff, {buff = buff}) or {})
+                current = out.current or current
+                winningslot = out.winningslot or winningslot
+                ArcCW.BuffStack = false
+            end
+    
+            return current or default, winningslot
         end
-
-        return current or default, winningslot
-    end
-
-    if self.TickCache_Overrides[buff] then
-        current = self.TickCache_Overrides[buff][1]
-        winningslot = self.TickCache_Overrides[buff][2]
-
-        local data = {
-            buff = buff,
-            current = current,
-            winningslot = winningslot
-        }
-
-        if !ArcCW.BuffStack then
-
-            ArcCW.BuffStack = true
-
-            local out = (self:GetBuff_Hook("O_Hook_" .. buff, data) or {})
-
-            current = out.current or current
-            winningslot = out.winningslot or winningslot
-
-            ArcCW.BuffStack = false
-
-        end
-
-        if current == nil then
-            return default
-        else
-            return current, winningslot
-        end
-    end
-
-    for i, k in pairs(self.Attachments) do
-        if !k.Installed then continue end
-
-        local atttbl = ArcCW.AttachmentTable[k.Installed]
-
-        if !atttbl then continue end
-
-        if atttbl[buff] != nil then
-            local pri = atttbl[buff .. "_Priority"] or 1
-            if level == 0 or (pri > level) then
-                current = atttbl[buff]
-                level = pri
-                winningslot = i
+    
+        -- uuugghh WHY I AM DOING THIS
+        local buffConcPriority = buff .. "_Priority"
+    
+        local buffOverrides = self.TickCache_Overrides[buff]
+        if buffOverrides then
+            current = buffOverrides[1]
+            winningslot = buffOverrides[2]
+    
+            overrideData.buff = buff
+            overrideData.current = current
+            overrideData.winningslot = winningslot
+    
+            if !ArcCW.BuffStack then
+                ArcCW.BuffStack = true
+    
+                local out = (self:GetBuff_Hook("O_Hook_" .. buff, overrideData) or {})
+    
+                current = out.current or current
+                winningslot = out.winningslot or winningslot
+    
+                ArcCW.BuffStack = false
+            end
+    
+            if current == nil then
+                return default
+            else
+                return current, winningslot
             end
         end
-
-        if atttbl.ToggleStats and k.ToggleNum and atttbl.ToggleStats[k.ToggleNum] and atttbl.ToggleStats[k.ToggleNum][buff] then
-            local pri = atttbl.ToggleStats[k.ToggleNum][buff .. "_Priority"] or 1
-            if level == 0 or (pri > level) then
-                current = atttbl.ToggleStats[k.ToggleNum][buff]
-                level = pri
-                winningslot = i
-            end
-        end
-    end
-
-    if !ArcCW.BuffStack then
-
-        ArcCW.BuffStack = true
-
-        local cfm = self:GetCurrentFiremode()
-
-        if cfm and cfm[buff] != nil then
-            local pri = cfm[buff .. "_Priority"] or 1
-            if level == 0 or (pri > level) then
-                current = cfm[buff]
-                level = pri
-            end
-        end
-
-        ArcCW.BuffStack = false
-
-    end
-
-    if !ArcCW.BuffStack then
-
-        ArcCW.BuffStack = true
-
-        for i, e in pairs(self:GetActiveElements()) do
-            local ele = self.AttachmentElements[e]
-
-            if ele and ele[buff] != nil then
-                local pri = ele[buff .. "_Priority"] or 1
+    
+        for i, k in ipairs(self.Attachments) do
+            if !k.Installed then continue end
+    
+            local atttbl = ArcCW.AttachmentTable[k.Installed]
+    
+            if !atttbl then continue end
+    
+            if atttbl[buff] != nil then
+                local pri = atttbl[buffConcPriority] or 1
                 if level == 0 or (pri > level) then
-                    current = ele[buff]
+                    current = atttbl[buff]
                     level = pri
                     winningslot = i
                 end
             end
-        end
 
-        ArcCW.BuffStack = false
+            if atttbl.ToggleStats and k.ToggleNum then
+                local toggleNumStats = atttbl.ToggleStats[k.ToggleNum]
 
-    end
-
-    if self:GetTable()[buff] != nil then
-        local pri = self:GetTable()[buff .. "_Priority"] or 1
-        if level == 0 or (pri > level) then
-            current = self:GetTable()[buff]
-            level = pri
-        end
-    end
-
-    self.TickCache_Overrides[buff] = {current, winningslot}
-
-    if VERIFY_MODIFIED_CACHE and !self.ModifiedCache[buff] and current != nil then
-        print("ArcCW: Presumed non-changing buff '" .. buff .. "' is modified (" .. tostring(current) .. ")!")
-    end
-
-    local data = {
-        buff = buff,
-        current = current,
-        winningslot = winningslot
-    }
-
-    if !ArcCW.BuffStack then
-
-        ArcCW.BuffStack = true
-
-        current = (self:GetBuff_Hook("O_Hook_" .. buff, data) or {}).current or current
-
-        ArcCW.BuffStack = false
-
-    end
-
-    if current == nil then
-        current = default
-    end
-
-    return current, winningslot
-end
-
-function SWEP:GetBuff_Mult(buff)
-
-    local mult = 1
-
-    if MODIFIED_CACHE and !self.ModifiedCache[buff] then
-        if !ArcCW.BuffStack then
-            ArcCW.BuffStack = true
-            mult = (self:GetBuff_Hook("M_Hook_" .. buff, {buff = buff, mult = 1}) or {}).mult or mult
-            ArcCW.BuffStack = false
-        end
-        if ArcCW.ConVar_BuffMults[buff] then
-            if buff == "Mult_CycleTime" then
-                mult = mult / GetConVar(ArcCW.ConVar_BuffMults[buff]):GetFloat()
-            else
-                mult = mult * GetConVar(ArcCW.ConVar_BuffMults[buff]):GetFloat()
+                if toggleNumStats and toggleNumStats[buff] then
+                    local pri = toggleNumStats[buffConcPriority] or 1
+                    if level == 0 or (pri > level) then
+                        current = toggleNumStats[buff]
+                        level = pri
+                        winningslot = i
+                    end
+                end
             end
         end
-        return mult
-    end
-
-    if self.TickCache_Mults[buff] then
-        mult = self.TickCache_Mults[buff]
-        local data = {
-            buff = buff,
-            mult = mult
-        }
-
+    
         if !ArcCW.BuffStack then
-
             ArcCW.BuffStack = true
-
-            mult = (self:GetBuff_Hook("M_Hook_" .. buff, data) or {}).mult or mult
-
+    
+            local cfm = self:GetCurrentFiremode()
+    
+            if cfm and cfm[buff] != nil then
+                local pri = cfm[buffConcPriority] or 1
+                if level == 0 or (pri > level) then
+                    current = cfm[buff]
+                    level = pri
+                end
+            end
+    
             ArcCW.BuffStack = false
+        end
+    
+        if !ArcCW.BuffStack then
+            ArcCW.BuffStack = true
+    
+            local attachmentElements = self.AttachmentElements
+            for i, e in ipairs(self:GetActiveElements()) do
+                local ele = attachmentElements[e]
+    
+                if ele and ele[buff] != nil then
+                    local pri = ele[buffConcPriority] or 1
+                    if level == 0 or (pri > level) then
+                        current = ele[buff]
+                        level = pri
+                        winningslot = i
+                    end
+                end
+            end
+    
+            ArcCW.BuffStack = false
+        end
+    
+        local selfBuff = self[buff]
+        if selfBuff != nil then
+            local pri = self[buffConcPriority] or 1
+            if level == 0 or (pri > level) then
+                current = selfBuff
+                level = pri
+            end
+        end
+    
+        self.TickCache_Overrides[buff] = {current, winningslot}
+    
+        if VERIFY_MODIFIED_CACHE and !self.ModifiedCache[buff] and current != nil then
+            print("ArcCW: Presumed non-changing buff '" .. buff .. "' is modified (" .. tostring(current) .. ")!")
+        end
+    
+        overrideData.buff = buff
+        overrideData.current = current
+        overrideData.winningslot = winningslot
+    
+        if !ArcCW.BuffStack then
+            ArcCW.BuffStack = true
+            current = (self:GetBuff_Hook("O_Hook_" .. buff, overrideData) or {}).current or current
+            ArcCW.BuffStack = false
+        end
+    
+        if current == nil then
+            current = default
+        end
+    
+        return current, winningslot
+    end
+end
 
+local cvarGetFloat = FindMetaTable('ConVar').GetFloat
+
+do
+    -- to be modified
+    local overrideData = {
+        buff = true,
+        mult = true,
+    }
+
+    function SWEP:GetBuff_Mult(buff)
+        local mult = 1
+        local multCvar = cvarGetFloat(GetConVar(ArcCW.ConVar_BuffMults[buff]))
+
+        if MODIFIED_CACHE and !self.ModifiedCache[buff] then
+            if !ArcCW.BuffStack then
+                ArcCW.BuffStack = true
+                mult = (self:GetBuff_Hook("M_Hook_" .. buff, {buff = buff, mult = 1}) or {}).mult or mult
+                ArcCW.BuffStack = false
+            end
+            if ArcCW.ConVar_BuffMults[buff] then
+                if buff == "Mult_CycleTime" then
+                    mult = mult / multCvar
+                else
+                    mult = mult * multCvar
+                end
+            end
+            return mult
+        end
+
+        if self.TickCache_Mults[buff] then
+            mult = self.TickCache_Mults[buff]
+
+            overrideData.buff = buff
+            overrideData.mult = mult
+
+            if !ArcCW.BuffStack then
+                ArcCW.BuffStack = true
+
+                mult = (self:GetBuff_Hook("M_Hook_" .. buff, overrideData) or {}).mult or mult
+
+                ArcCW.BuffStack = false
+            end
+
+            if ArcCW.ConVar_BuffMults[buff] then
+                if buff == "Mult_CycleTime" then
+                    mult = mult / multCvar
+                else
+                    mult = mult * multCvar
+                end
+            end
+
+            return mult
+        end
+
+        for i, k in ipairs(self.Attachments) do
+            if !k.Installed then continue end
+
+            local atttbl = ArcCW.AttachmentTable[k.Installed]
+
+            if atttbl[buff] then
+                mult = mult * atttbl[buff]
+            end
+
+            if atttbl.ToggleStats and k.ToggleNum and atttbl.ToggleStats[k.ToggleNum] and atttbl.ToggleStats[k.ToggleNum][buff] then
+                mult = mult * atttbl.ToggleStats[k.ToggleNum][buff]
+            end
+        end
+
+        local cfm = self:GetCurrentFiremode()
+
+        if cfm and cfm[buff] then
+            mult = mult * cfm[buff]
+        end
+
+        local selfBuff = self[buff]
+        if selfBuff then
+            mult = mult * selfBuff
+        end
+
+        local attachmentElements = self.AttachmentElements
+        for i, e in ipairs(self:GetActiveElements()) do
+            local ele = attachmentElements[e]
+    
+            if ele and ele[buff] then
+                mult = mult * ele[buff]
+            end
+        end
+
+        self.TickCache_Mults[buff] = mult
+
+        if VERIFY_MODIFIED_CACHE and !self.ModifiedCache[buff] and mult != 1 then
+            print("ArcCW: Presumed non-changing buff '" .. buff .. "' is modified (" .. tostring(mult) .. ")!")
         end
 
         if ArcCW.ConVar_BuffMults[buff] then
             if buff == "Mult_CycleTime" then
-                mult = mult / GetConVar(ArcCW.ConVar_BuffMults[buff]):GetFloat()
+                mult = mult / multCvar
             else
-                mult = mult * GetConVar(ArcCW.ConVar_BuffMults[buff]):GetFloat()
+                mult = mult * multCvar
             end
         end
 
-        return mult
-    end
+        overrideData.buff = buff
+        overrideData.mult = mult
 
-    for i, k in pairs(self.Attachments) do
-        if !k.Installed then continue end
-
-        local atttbl = ArcCW.AttachmentTable[k.Installed]
-
-        if atttbl[buff] then
-            mult = mult * atttbl[buff]
-        end
-
-        if atttbl.ToggleStats and k.ToggleNum and atttbl.ToggleStats[k.ToggleNum] and atttbl.ToggleStats[k.ToggleNum][buff] then
-            mult = mult * atttbl.ToggleStats[k.ToggleNum][buff]
-        end
-    end
-
-    local cfm = self:GetCurrentFiremode()
-
-    if cfm and cfm[buff] then
-        mult = mult * cfm[buff]
-    end
-
-    if self:GetTable()[buff] then
-        mult = mult * self:GetTable()[buff]
-    end
-
-    for i, e in pairs(self:GetActiveElements()) do
-        local ele = self.AttachmentElements[e]
-
-        if ele and ele[buff] then
-            mult = mult * ele[buff]
-        end
-    end
-
-    self.TickCache_Mults[buff] = mult
-
-    if VERIFY_MODIFIED_CACHE and !self.ModifiedCache[buff] and mult != 1 then
-        print("ArcCW: Presumed non-changing buff '" .. buff .. "' is modified (" .. tostring(mult) .. ")!")
-    end
-
-    if ArcCW.ConVar_BuffMults[buff] then
-        if buff == "Mult_CycleTime" then
-            mult = mult / GetConVar(ArcCW.ConVar_BuffMults[buff]):GetFloat()
-        else
-            mult = mult * GetConVar(ArcCW.ConVar_BuffMults[buff]):GetFloat()
-        end
-    end
-
-    local data = {
-        buff = buff,
-        mult = mult
-    }
-
-    if !ArcCW.BuffStack then
-
-        ArcCW.BuffStack = true
-
-        mult = (self:GetBuff_Hook("M_Hook_" .. buff, data) or {}).mult or mult
-
-        ArcCW.BuffStack = false
-
-    end
-
-    return mult
-end
-
-function SWEP:GetBuff_Add(buff)
-    local add = 0
-
-    if MODIFIED_CACHE and !self.ModifiedCache[buff] then
         if !ArcCW.BuffStack then
             ArcCW.BuffStack = true
-            add = (self:GetBuff_Hook("A_Hook_" .. buff, {buff = buff, add = 0}) or {}).add or add
+            mult = (self:GetBuff_Hook("M_Hook_" .. buff, overrideData) or {}).mult or mult
             ArcCW.BuffStack = false
         end
+    
+        return mult
+    end
+end
+
+do
+    -- to be modified
+    local overrideData = {
+        buff = true,
+        add = true,
+    }
+
+    function SWEP:GetBuff_Add(buff)
+        local add = 0
+        local addCvarValue = cvarGetFloat(GetConVar(ArcCW.ConVar_BuffAdds[buff]))
+
+        if MODIFIED_CACHE and !self.ModifiedCache[buff] then
+            if !ArcCW.BuffStack then
+                ArcCW.BuffStack = true
+
+                overrideData.buff = buff
+                overrideData.add = 0
+
+                add = (self:GetBuff_Hook("A_Hook_" .. buff, overrideData) or {}).add or add
+                ArcCW.BuffStack = false
+            end
+            if ArcCW.ConVar_BuffAdds[buff] then
+                add = add + addCvarValue
+            end
+            return add
+        end
+
+        if self.TickCache_Adds[buff] then
+            add = self.TickCache_Adds[buff]
+
+            if !ArcCW.BuffStack then
+                ArcCW.BuffStack = true
+
+                overrideData.buff = buff
+                overrideData.add = add
+                add = (self:GetBuff_Hook("A_Hook_" .. buff, overrideData) or {}).add or add
+                ArcCW.BuffStack = false
+            end
+
+            if ArcCW.ConVar_BuffAdds[buff] then
+                add = add + addCvarValue
+            end
+
+            return add
+        end
+
+        for i, k in ipairs(self.Attachments) do
+            if !k.Installed then continue end
+
+            local atttbl = ArcCW.AttachmentTable[k.Installed]
+
+            if atttbl[buff] then
+                add = add + atttbl[buff]
+            end
+
+            if atttbl.ToggleStats and k.ToggleNum and atttbl.ToggleStats[k.ToggleNum] and atttbl.ToggleStats[k.ToggleNum][buff] then
+                add = add + atttbl.ToggleStats[k.ToggleNum][buff]
+            end
+        end
+
+        local cfm = self:GetCurrentFiremode()
+    
+        if cfm and cfm[buff] then
+            add = add + cfm[buff]
+        end
+
+        local attachmentElements = self.AttachmentElements
+        for i, e in ipairs(self:GetActiveElements()) do
+            local ele = attachmentElements[e]
+    
+            if ele and ele[buff] then
+                add = add + ele[buff]
+            end
+        end
+
+        self.TickCache_Adds[buff] = add
+
+        if VERIFY_MODIFIED_CACHE and !self.ModifiedCache[buff] and add != 0 then
+            print("ArcCW: Presumed non-changing buff '" .. buff .. "' is modified (" .. tostring(add) .. ")!")
+        end
+
         if ArcCW.ConVar_BuffAdds[buff] then
-            add = add + GetConVar(ArcCW.ConVar_BuffAdds[buff]):GetFloat()
+            add = add + addCvarValue
+        end
+
+        if !ArcCW.BuffStack then
+            ArcCW.BuffStack = true
+
+            overrideData.buff = buff
+            overrideData.add = add
+
+            add = (self:GetBuff_Hook("A_Hook_" .. buff, overrideData) or {}).add or add
+            ArcCW.BuffStack = false
         end
         return add
     end
-
-    if self.TickCache_Adds[buff] then
-        add = self.TickCache_Adds[buff]
-
-        local data = {
-            buff = buff,
-            add = add
-        }
-
-        if !ArcCW.BuffStack then
-
-            ArcCW.BuffStack = true
-
-            add = (self:GetBuff_Hook("A_Hook_" .. buff, data) or {}).add or add
-
-            ArcCW.BuffStack = false
-
-        end
-
-        if ArcCW.ConVar_BuffAdds[buff] then
-            add = add + GetConVar(ArcCW.ConVar_BuffAdds[buff]):GetFloat()
-        end
-
-        return add
-    end
-
-    for i, k in pairs(self.Attachments) do
-        if !k.Installed then continue end
-
-        local atttbl = ArcCW.AttachmentTable[k.Installed]
-
-        if atttbl[buff] then
-            add = add + atttbl[buff]
-        end
-
-        if atttbl.ToggleStats and k.ToggleNum and atttbl.ToggleStats[k.ToggleNum] and atttbl.ToggleStats[k.ToggleNum][buff] then
-            add = add + atttbl.ToggleStats[k.ToggleNum][buff]
-        end
-    end
-
-    local cfm = self:GetCurrentFiremode()
-
-    if cfm and cfm[buff] then
-        add = add + cfm[buff]
-    end
-
-    for i, e in pairs(self:GetActiveElements()) do
-        local ele = self.AttachmentElements[e]
-
-        if ele and ele[buff] then
-            add = add + ele[buff]
-        end
-    end
-
-    self.TickCache_Adds[buff] = add
-
-    if VERIFY_MODIFIED_CACHE and !self.ModifiedCache[buff] and add != 0 then
-        print("ArcCW: Presumed non-changing buff '" .. buff .. "' is modified (" .. tostring(add) .. ")!")
-    end
-
-    if ArcCW.ConVar_BuffAdds[buff] then
-        add = add + GetConVar(ArcCW.ConVar_BuffAdds[buff]):GetFloat()
-    end
-
-    local data = {
-        buff = buff,
-        add = add
-    }
-
-    if !ArcCW.BuffStack then
-
-        ArcCW.BuffStack = true
-
-        add = (self:GetBuff_Hook("A_Hook_" .. buff, data) or {}).add or add
-
-        ArcCW.BuffStack = false
-
-    end
-
-    return add
 end
 
 SWEP.ActiveElementCache = nil
