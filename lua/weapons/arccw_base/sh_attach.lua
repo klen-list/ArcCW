@@ -618,29 +618,51 @@ function SWEP:GetActiveElements(recache)
     if ArcCW.Overflow and self.ActiveElementCache then return self.ActiveElementCache end
 
     local eles = {}
+    local elesLen = 0
 
-    for _, i in pairs(self.Attachments) do
-        if !i.Installed then
-            if i.DefaultEles then
-                table.Add(eles, i.DefaultEles)
+    for _, i in ipairs(self.Attachments) do
+        local defaultEles = i.DefaultEles
+        if !i.Installed and defaultEles then
+            local defaultElesLen = #defaultEles
+
+            for i = 1, defaultElesLen do
+                eles[elesLen + i] = defaultEles[i]
             end
+            elesLen = elesLen + defaultElesLen
             continue
         end
 
+        local installedEles = i.InstalledEles
         if i.InstalledEles and i.Installed != i.EmptyFallback then
-            table.Add(eles, i.InstalledEles)
+            local installedElesLen = #installedEles
+
+            for i = 1, installedElesLen do
+                eles[elesLen + i] = installedEles[i]
+            end
+            elesLen = elesLen + installedElesLen
         end
 
         local atttbl = ArcCW.AttachmentTable[i.Installed]
 
-        if atttbl.ActivateElements then
-            table.Add(eles, atttbl.ActivateElements)
+        local activateElements = atttbl.ActivateElements
+        if activateElements then
+            local activateElementsLen = #activateElements
+
+            for i = 1, activateElementsLen do
+                eles[elesLen + i] = activateElements[i]
+            end
+            elesLen = elesLen + activateElementsLen
         end
 
         local num = i.ToggleNum or 1
         if atttbl.ToggleStats and atttbl.ToggleStats[num] and (atttbl.ToggleStats[num]["ActivateElements"] != nil) then
-            table.Add(eles, atttbl.ToggleStats[num]["ActivateElements"])
-            --atttbl.ToggleStats[num][buff]
+            local statsActivateElements = atttbl.ToggleStats[num]["ActivateElements"]
+            local statsActivateElementsLen = #activateElements
+
+            for i = 1, statsActivateElementsLen do
+                eles[elesLen + i] = statsActivateElements[i]
+            end
+            elesLen = elesLen + statsActivateElementsLen
         end
 
         local slots = atttbl.Slot
