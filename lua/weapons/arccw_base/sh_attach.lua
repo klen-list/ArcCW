@@ -151,10 +151,15 @@ do
         return a[2] >= b[2]
     end
 
-    local functionMeta = {MetaName = 'function'}
-    debug.setmetatable(function() end, functionMeta)
-
+    local blank = function() end
     local getmetatable = getmetatable
+
+    local functionMeta = getmetatable(blank)
+    if not functionMeta then
+        functionMeta = {MetaName = 'function'}
+        debug.setmetatable(blank, functionMeta)
+    end
+
     local function isfunction(val)
         return getmetatable(val) == functionMeta
     end
