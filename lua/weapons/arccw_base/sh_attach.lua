@@ -183,14 +183,16 @@ do
                 if !atttbl then continue end
                 local tblBuff = atttbl[buff]
 
-                local toggleNumStats = atttbl.ToggleStats[k.ToggleNum]
-
-                if isfunction(tblBuff) then
-                    buffHooksLen = buffHooksLen + 1
-                    buffHooks[buffHooksLen] = {tblBuff, atttbl[buffConcPriority] or 0}
-                elseif atttbl.ToggleStats and k.ToggleNum and toggleNumStats and isfunction(toggleNumStats[buff]) then
-                    buffHooksLen = buffHooksLen + 1
-                    buffHooks[buffHooksLen] = {toggleNumStats[buff], toggleNumStats[buffConcPriority] or 0}
+                if k.ToggleNum and atttbl.ToggleStats then                    
+                    local toggleNumStats = atttbl.ToggleStats[k.ToggleNum]
+    
+                    if isfunction(tblBuff) then
+                        buffHooksLen = buffHooksLen + 1
+                        buffHooks[buffHooksLen] = {tblBuff, atttbl[buffConcPriority] or 0}
+                    elseif atttbl.ToggleStats and k.ToggleNum and toggleNumStats and isfunction(toggleNumStats[buff]) then
+                        buffHooksLen = buffHooksLen + 1
+                        buffHooks[buffHooksLen] = {toggleNumStats[buff], toggleNumStats[buffConcPriority] or 0}
+                    end
                 end
             end
 
@@ -493,9 +495,9 @@ do
 
         if ArcCW.ConVar_BuffMults[buff] then
             if buff == "Mult_CycleTime" then
-                mult = mult / multCvar
+                mult = mult / cvarGetFloat(GetConVar(ArcCW.ConVar_BuffMults[buff]))
             else
-                mult = mult * multCvar
+                mult = mult * cvarGetFloat(GetConVar(ArcCW.ConVar_BuffMults[buff]))
             end
         end
 
@@ -706,7 +708,7 @@ function SWEP:GetActiveElements(recache)
 
     local attachmentElements = self.AttachmentElements
     -- for f, i in ipairs(eles) do
-    for i = 1, elesLen do
+    for f = 1, elesLen do
         local elesElement = eles[i]
         local e = attachmentElements[elesElement]
 
