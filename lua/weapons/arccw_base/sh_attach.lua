@@ -409,7 +409,6 @@ do
 
     function SWEP:GetBuff_Mult(buff)
         local mult = 1
-        local multCvar = cvarGetFloat(GetConVar(ArcCW.ConVar_BuffMults[buff]))
 
         if MODIFIED_CACHE and !self.ModifiedCache[buff] then
             if !ArcCW.BuffStack then
@@ -419,9 +418,9 @@ do
             end
             if ArcCW.ConVar_BuffMults[buff] then
                 if buff == "Mult_CycleTime" then
-                    mult = mult / multCvar
+                    mult = mult / cvarGetFloat(GetConVar(ArcCW.ConVar_BuffMults[buff]))
                 else
-                    mult = mult * multCvar
+                    mult = mult * cvarGetFloat(GetConVar(ArcCW.ConVar_BuffMults[buff]))
                 end
             end
             return mult
@@ -443,9 +442,9 @@ do
 
             if ArcCW.ConVar_BuffMults[buff] then
                 if buff == "Mult_CycleTime" then
-                    mult = mult / multCvar
+                    mult = mult / cvarGetFloat(GetConVar(ArcCW.ConVar_BuffMults[buff]))
                 else
-                    mult = mult * multCvar
+                    mult = mult * cvarGetFloat(GetConVar(ArcCW.ConVar_BuffMults[buff]))
                 end
             end
 
@@ -522,7 +521,6 @@ do
 
     function SWEP:GetBuff_Add(buff)
         local add = 0
-        local addCvarValue = cvarGetFloat(GetConVar(ArcCW.ConVar_BuffAdds[buff]))
 
         if MODIFIED_CACHE and !self.ModifiedCache[buff] then
             if !ArcCW.BuffStack then
@@ -535,7 +533,7 @@ do
                 ArcCW.BuffStack = false
             end
             if ArcCW.ConVar_BuffAdds[buff] then
-                add = add + addCvarValue
+                add = add + cvarGetFloat(GetConVar(ArcCW.ConVar_BuffAdds[buff]))
             end
             return add
         end
@@ -553,7 +551,7 @@ do
             end
 
             if ArcCW.ConVar_BuffAdds[buff] then
-                add = add + addCvarValue
+                add = add + cvarGetFloat(GetConVar(ArcCW.ConVar_BuffAdds[buff]))
             end
 
             return add
@@ -595,7 +593,7 @@ do
         end
 
         if ArcCW.ConVar_BuffAdds[buff] then
-            add = add + addCvarValue
+            add = add + cvarGetFloat(GetConVar(ArcCW.ConVar_BuffAdds[buff]))
         end
 
         if !ArcCW.BuffStack then
@@ -618,29 +616,53 @@ function SWEP:GetActiveElements(recache)
     if ArcCW.Overflow and self.ActiveElementCache then return self.ActiveElementCache end
 
     local eles = {}
+    local elesLen = 0
 
-    for _, i in pairs(self.Attachments) do
+    for _, i in ipairs(self.Attachments) do
         if !i.Installed then
-            if i.DefaultEles then
-                table.Add(eles, i.DefaultEles)
+            local defaultEles = i.DefaultEles
+            if defaultEles then                
+                local defaultElesLen = #defaultEles
+    
+                for i = 1, defaultElesLen do
+                    eles[elesLen + i] = defaultEles[i]
+                end
+                elesLen = elesLen + defaultElesLen
             end
             continue
         end
 
+        local installedEles = i.InstalledEles
         if i.InstalledEles and i.Installed != i.EmptyFallback then
-            table.Add(eles, i.InstalledEles)
+            local installedElesLen = #installedEles
+
+            for i = 1, installedElesLen do
+                eles[elesLen + i] = installedEles[i]
+            end
+            elesLen = elesLen + installedElesLen
         end
 
         local atttbl = ArcCW.AttachmentTable[i.Installed]
 
-        if atttbl.ActivateElements then
-            table.Add(eles, atttbl.ActivateElements)
+        local activateElements = atttbl.ActivateElements
+        if activateElements then
+            local activateElementsLen = #activateElements
+
+            for i = 1, activateElementsLen do
+                eles[elesLen + i] = activateElements[i]
+            end
+            elesLen = elesLen + activateElementsLen
         end
 
         local num = i.ToggleNum or 1
         if atttbl.ToggleStats and atttbl.ToggleStats[num] and (atttbl.ToggleStats[num]["ActivateElements"] != nil) then
-            table.Add(eles, atttbl.ToggleStats[num]["ActivateElements"])
-            --atttbl.ToggleStats[num][buff]
+            local statsActivateElements = atttbl.ToggleStats[num]["ActivateElements"]
+            local statsActivateElementsLen = #activateElements
+
+            for i = 1, statsActivateElementsLen do
+                eles[elesLen + i] = statsActivateElements[i]
+            end
+            elesLen = elesLen + statsActivateElementsLen
         end
 
         local slots = atttbl.Slot
