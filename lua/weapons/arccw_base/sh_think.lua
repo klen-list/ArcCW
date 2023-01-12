@@ -26,6 +26,8 @@ function SWEP:Think()
         self:SetState(ArcCW.STATE_IDLE)
     end
 
+    local swepDt = self.dt
+
     for i, v in ipairs(self.EventTable) do
         for ed, bz in pairs(v) do
             if ed <= now then
@@ -49,16 +51,16 @@ function SWEP:Think()
 
     self.BurstCount = self:GetBurstCount()
 
-    local sg = self:GetShotgunReloading()
+    local sg = swepDt.ShotgunReloading
     if (sg == 2 or sg == 4) and owner:KeyPressed(IN_ATTACK) then
         self:SetShotgunReloading(sg + 1)
-    elseif (sg >= 2) and self:GetReloadingREAL() <= now then
+    elseif (sg >= 2) and swepDt.ReloadingREAL <= now then
         self:ReloadInsert(sg >= 4)
     end
 
     self:InBipod()
 
-    if self:GetNeedCycle() and !self.Throwing and !self:GetReloading() and self:GetWeaponOpDelay() < now and self:GetNextPrimaryFire() < now and -- Adding this delays bolting if the RPM is too low, but removing it may reintroduce the double pump bug. Increasing the RPM allows you to shoot twice on many multiplayer servers. Sure would be convenient if everything just worked nicely
+    if swepDt.NeedCycle and !self.Throwing and !self:GetReloading() and swepDt.WeaponOpDelay < now and self:GetNextPrimaryFire() < now and -- Adding this delays bolting if the RPM is too low, but removing it may reintroduce the double pump bug. Increasing the RPM allows you to shoot twice on many multiplayer servers. Sure would be convenient if everything just worked nicely
             (!GetConVar("arccw_clicktocycle"):GetBool() and (self:GetCurrentFiremode().Mode == 2 or !owner:KeyDown(IN_ATTACK))
             or GetConVar("arccw_clicktocycle"):GetBool() and (self:GetCurrentFiremode().Mode == 2 or owner:KeyPressed(IN_ATTACK))) then
         local anim = self:SelectAnimation("cycle")
@@ -71,11 +73,11 @@ function SWEP:Think()
         end
     end
 
-    if self:GetGrenadePrimed() and !(owner:KeyDown(IN_ATTACK) or owner:KeyDown(IN_ATTACK2)) and (!isSingleplayer or SERVER) then
+    if swepDt.GrenadePrimed and !(owner:KeyDown(IN_ATTACK) or owner:KeyDown(IN_ATTACK2)) and (!isSingleplayer or SERVER) then
         self:Throw()
     end
 
-    if self:GetGrenadePrimed() and self.GrenadePrimeTime > 0 and self.isCooked then
+    if swepDt.GrenadePrimed and self.GrenadePrimeTime > 0 and self.isCooked then
         local heldtime = (now - self.GrenadePrimeTime)
 
         local ft = self:GetBuff_Override("Override_FuseTime") or self.FuseTime
@@ -283,7 +285,7 @@ function SWEP:Think()
 
     -- self:RefreshBGs()
 
-    if self:GetMagUpIn() != 0 and now > self:GetMagUpIn() then
+    if swepDt.MagUpIn != 0 and now > swepDt.MagUpIn then
         self:ReloadTimed()
         self:SetMagUpIn( 0 )
     end
@@ -309,13 +311,13 @@ function SWEP:Think()
     --end
 
     -- Only reset to idle if we don't need cycle. empty idle animation usually doesn't play nice
-    if self:GetNextIdle() != 0 and self:GetNextIdle() <= now and !self:GetNeedCycle()
-            and self:GetHolster_Time() == 0 and self:GetShotgunReloading() == 0 then
+    if swepDt.NextIdle != 0 and swepDt.NextIdle <= now and !self:GetNeedCycle()
+            and self:GetHolster_Time() == 0 and swepDt.ShotgunReloading == 0 then
         self:SetNextIdle(0)
         self:PlayIdleAnimation(true)
     end
 
-    if self:GetUBGLDebounce() and !owner:KeyDown(IN_RELOAD) then
+    if swepDt.UBGLDebounce and !owner:KeyDown(IN_RELOAD) then
         self:SetUBGLDebounce( false )
     end
 end
