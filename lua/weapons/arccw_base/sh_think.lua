@@ -13,12 +13,14 @@ function SWEP:Think()
     local now = CurTime()
     local owner = self:GetOwner()
 
-    if IsValid(owner) and self:GetClass() == "arccw_base" then
+    local isValidOwner = owner:IsValid()
+    if isValidOwner and self:GetClass() == "arccw_base" then
         self:Remove()
         return
     end
 
-    if !IsValid(owner) or owner:IsNPC() then return end
+    if not isValidOwner or owner:IsNPC() then return end
+    local isFirstTimePredicted = IsFirstTimePredicted()
 
     if self:GetState() == ArcCW.STATE_DISABLE and !self:GetPriorityAnim() then
         self:SetState(ArcCW.STATE_IDLE)
@@ -38,9 +40,7 @@ function SWEP:Think()
         end
     end
 
-    if CLIENT and (!isSingleplayer and IsFirstTimePredicted() or true)
-            and owner == LocalPlayer() and ArcCW.InvHUD
-            and !ArcCW.Inv_Hidden and ArcCW.Inv_Fade == 0 then
+    if CLIENT and owner == LocalPlayer() and ArcCW.InvHUD and !ArcCW.Inv_Hidden and ArcCW.Inv_Fade == 0 then
         ArcCW.InvHUD:Remove()
         ArcCW.Inv_Fade = 0.01
     end
@@ -53,7 +53,7 @@ function SWEP:Think()
     if (sg == 2 or sg == 4) and owner:KeyPressed(IN_ATTACK) then
         self:SetShotgunReloading(sg + 1)
     elseif (sg >= 2) and self:GetReloadingREAL() <= now then
-        self:ReloadInsert((sg >= 4) and true or false)
+        self:ReloadInsert(sg >= 4)
     end
 
     self:InBipod()
@@ -85,7 +85,7 @@ function SWEP:Think()
         end
     end
 
-    if IsFirstTimePredicted() and self:GetNextPrimaryFire() < now and owner:KeyReleased(IN_USE) then
+    if isFirstTimePredicted and self:GetNextPrimaryFire() < now and owner:KeyReleased(IN_USE) then
         if self:InBipod() then
             self:ExitBipod()
         else
@@ -174,7 +174,7 @@ function SWEP:Think()
 
     end
 
-    if (!isSingleplayer and IsFirstTimePredicted()) or (isSingleplayer and true) then
+    if (!isSingleplayer and isFirstTimePredicted) or (isSingleplayer and true) then
         if self:InSprint() and (self:GetState() != ArcCW.STATE_SPRINT) then
             self:EnterSprint()
         elseif !self:InSprint() and (self:GetState() == ArcCW.STATE_SPRINT) then
@@ -182,12 +182,14 @@ function SWEP:Think()
         end
     end
 
-    if isSingleplayer or IsFirstTimePredicted() then
+    local spOrFirstTimePredicted = isSingleplayer or isFirstTimePredicted
+
+    if spOrFirstTimePredicted then
         self:SetSightDelta(math.Approach(self:GetSightDelta(), self:GetState() == ArcCW.STATE_SIGHTS and 0 or 1, FrameTime() / self:GetSightTime()))
         self:SetSprintDelta(math.Approach(self:GetSprintDelta(), self:GetState() == ArcCW.STATE_SPRINT and 1 or 0, FrameTime() / self:GetSprintTime()))
     end
 
-    if CLIENT and (isSingleplayer or IsFirstTimePredicted()) then
+    if CLIENT and (spOrFirstTimePredicted) then
         self:ProcessRecoil()
     end
 
