@@ -701,7 +701,9 @@ SWEP.ProneMod_DisableTransitions = true
 SWEP.DrawWeaponInfoBox = false
 SWEP.BounceWeaponIcon = false
 
-if CLIENT or game.SinglePlayer() then
+local isSingleplayer = game.SinglePlayer()
+
+if CLIENT or isSingleplayer then
 
 SWEP.RecoilAmount = 0
 SWEP.RecoilAmountSide = 0
@@ -845,14 +847,24 @@ function SWEP:GetBurstCount()
     return self:GetBuff_Hook("Hook_GetBurstCount", self:GetBurstCountUM()) or self:GetBurstCountUM() or 0
 end
 
-function SWEP:SetState(v)
-    self:SetNWState(v)
-    if !game.SinglePlayer() and CLIENT then self.State = v end
-end
+if CLIENT and not isSingleplayer then
+    function SWEP:GetState()
+        return self.State or self.dt.NWState
+    end
 
-function SWEP:GetState(v)
-    if !game.SinglePlayer() and CLIENT and self.State then return self.State end
-    return self:GetNWState(v)
+    -- todo: almost sure we can do it better
+    function SWEP:SetState(state)
+        self:SetNWState(state)
+        self.State = state
+    end
+else
+    function SWEP:GetState()
+        self.dt.NWState
+    end
+
+    function SWEP:SetState(state)
+        self:SetNWState(state)
+    end
 end
 
 function SWEP:IsProne()
@@ -922,34 +934,34 @@ end
 
 SWEP.CL_SightDelta = 1
 function SWEP:SetSightDelta(d)
-    if !game.SinglePlayer() and CLIENT then self.CL_SightDelta = d end
+    if !isSingleplayer and CLIENT then self.CL_SightDelta = d end
     self:SetNWSightDelta(d)
 end
 
 function SWEP:GetSightDelta()
-    if !game.SinglePlayer() and CLIENT then return self.CL_SightDelta end
+    if !isSingleplayer and CLIENT then return self.CL_SightDelta end
     return self:GetNWSightDelta()
 end
 
 SWEP.CL_SprintDelta = 0
 function SWEP:SetSprintDelta(d)
-    if !game.SinglePlayer() and CLIENT then self.CL_SprintDelta = d end
+    if !isSingleplayer and CLIENT then self.CL_SprintDelta = d end
     self:SetNWSprintDelta(d)
 end
 
 function SWEP:GetSprintDelta()
-    if !game.SinglePlayer() and CLIENT then return self.CL_SprintDelta end
+    if !isSingleplayer and CLIENT then return self.CL_SprintDelta end
     return self:GetNWSprintDelta()
 end
 
 SWEP.CL_MalfunctionJam = false
 function SWEP:SetMalfunctionJam(d)
-    if !game.SinglePlayer() and CLIENT then self.CL_MalfunctionJam = tobool(d) end
+    if !isSingleplayer and CLIENT then self.CL_MalfunctionJam = tobool(d) end
     self:SetNWMalfunctionJam(d)
 end
 
 function SWEP:GetMalfunctionJam()
-    if !game.SinglePlayer() and CLIENT then return self.CL_MalfunctionJam end
+    if !isSingleplayer and CLIENT then return self.CL_MalfunctionJam end
     return self:GetNWMalfunctionJam()
 end
 
