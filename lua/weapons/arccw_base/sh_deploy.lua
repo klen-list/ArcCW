@@ -156,17 +156,18 @@ do
         local tab = ent:GetTable()
         setmetatable(tab, METATABLE)
 
-
-
         local mt = {
-            __index = function(self, key)
-                -- we still have to take care of these idiots
-                if key == "Owner" then
-                    return entityGetOwner(self, key)
-                end
+            -- __index = function(self, key)
+            --     -- we still have to take care of these idiots
+            --     if key == "Owner" then
+            --         return entityGetOwner(self, key)
+            --     end
 
-                return tab[key]
-            end,  
+            --     return tab[key]
+            -- end,
+            -- since we have our own "weapon_base_kent", which does not contain `self.Owner` and other shit
+            -- we can do this
+            __index = tab,
             __newindex = tab, 
             __metatable = ENTITY
         }
