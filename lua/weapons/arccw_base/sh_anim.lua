@@ -1,5 +1,7 @@
 SWEP.Cam_Offset_Ang = Angle(0, 0, 0)
 
+local isSingleplayer = game.SinglePlayer()
+
 function SWEP:SelectAnimation(anim)
     if self:GetNWState() == ArcCW.STATE_SIGHTS and self.Animations[anim .. "_iron"] then
         anim = anim .. "_iron"
@@ -49,6 +51,9 @@ function SWEP:PlayAnimationEZ(key, mult, priority)
     return self:PlayAnimation(key, mult, true, 0, false, false, priority, false)
 end
 
+local inf = math.huge
+local minf = -inf
+
 function SWEP:PlayAnimation(key, mult, pred, startfrom, tt, skipholster, priority, absolute)
     mult = mult or 1
     pred = pred or false
@@ -57,13 +62,16 @@ function SWEP:PlayAnimation(key, mult, pred, startfrom, tt, skipholster, priorit
     --skipholster = skipholster or false Unused
     priority = priority or false
     absolute = absolute or false
-    if !key then return end
+    if not key then return end
 
     local ct = CurTime()
 
-    if self:GetPriorityAnim() and !priority then return end
+    if self:GetPriorityAnim() and not priority then return end
 
-    if game.SinglePlayer() and SERVER and pred then
+    local owner = self:GetOwner()
+    local ownerIsPlayer = owner:IsPlayer()
+
+    if isSingleplayer and SERVER and pred then
         net.Start("arccw_sp_anim")
         net.WriteString(key)
         net.WriteFloat(mult)
@@ -71,11 +79,11 @@ function SWEP:PlayAnimation(key, mult, pred, startfrom, tt, skipholster, priorit
         net.WriteBool(tt)
         --net.WriteBool(skipholster) Unused
         net.WriteBool(priority)
-        net.Send(self:GetOwner())
+        net.Send(owner)
     end
 
     local anim = self.Animations[key]
-    if !anim then return end
+    if not anim then return end
     local tranim = self:GetBuff_Hook("Hook_TranslateAnimation", key)
     if self.Animations[tranim] then
         key = tranim
@@ -86,15 +94,17 @@ function SWEP:PlayAnimation(key, mult, pred, startfrom, tt, skipholster, priorit
         return]]
     end
 
-    if anim.ViewPunchTable and CLIENT then
-        for k, v in pairs(anim.ViewPunchTable) do
+    local isFirstTimePredicted = IsFirstTimePredicted()
+
+    if CLIENT and anim.ViewPunchTable then
+        for k, v in ipairs(anim.ViewPunchTable) do
 
             if !v.t then continue end
 
             local st = (v.t * mult) - startfrom
 
-            if isnumber(v.t) and st >= 0 and self:GetOwner():IsPlayer() and (game.SinglePlayer() or IsFirstTimePredicted()) then
-                self:SetTimer(st, function() self:OurViewPunch(v.p or Vector(0, 0, 0)) end, id)
+            if st >= 0 and isnumber(v.t) and ownerIsPlayer and (isSingleplayer or isFirstTimePredicted) then
+                self:SetTimer(st, function() self:OurViewPunch(v.p or vector_origin) end, id)
             end
         end
     end
@@ -105,28 +115,29 @@ function SWEP:PlayAnimation(key, mult, pred, startfrom, tt, skipholster, priorit
             if self.RevolverReload then
                 num = self.Primary.ClipSize - self:Clip1()
             end
-            for i = 1,num do
+            for i = 1, num do
                 self:DoShellEject()
             end
         end)
     end
 
-    if !self:GetOwner() then return end
-    if !self:GetOwner().GetViewModel then return end
-    local vm = self:GetOwner():GetViewModel()
+    if not owner then return end
+    if not owner.GetViewModel then return end
+    local vm = owner:GetViewModel()
 
-    if !vm then return end
-    if !IsValid(vm) then return end
+    if not IsValid(vm) then return end
+
+    local now = CurTime()
 
     local seq = anim.Source
-    if anim.RareSource and util.SharedRandom("raresource", 0, 1, CurTime()) < (1 / (anim.RareSourceChance or 100)) then
+    if anim.RareSource and util.SharedRandom("raresource", 0, 1, now) < (1 / (anim.RareSourceChance or 100)) then
         seq = anim.RareSource
     end
     seq = self:GetBuff_Hook("Hook_TranslateSequence", seq)
 
     if istable(seq) then
         seq["BaseClass"] = nil
-        seq = seq[math.Round(util.SharedRandom("randomseq" .. CurTime(), 1, #seq))]
+        seq = seq[math.Round(util.SharedRandom("randomseq" .. now, 1, #seq))]
     end
 
     if isstring(seq) then
@@ -134,10 +145,13 @@ function SWEP:PlayAnimation(key, mult, pred, startfrom, tt, skipholster, priorit
     end
 
     local time = absolute and 1 or self:GetAnimKeyTime(key)
-    --if time == 0 then return end
+    local timeMult = time * mult
+    local ttime = timeMult - startfrom
 
-    local ttime = (time * mult) - startfrom
-    if startfrom > (time * mult) then return end
+    -- if startfrom > timeMult then return end
+    if ttime < 0 then
+        return
+    end
 
     if tt then
         self:SetNextPrimaryFire(ct + ((anim.MinProgress or time) * mult) - startfrom)
@@ -148,29 +162,36 @@ function SWEP:PlayAnimation(key, mult, pred, startfrom, tt, skipholster, priorit
         self.LHIKEndTime = ct + ttime
 
         if anim.LHIKTimeline then
-            self.LHIKTimeline = {}
-
-            for i, k in pairs(anim.LHIKTimeline) do
-                table.Add(self.LHIKTimeline, {t = (k.t or 0) * mult, lhik = k.lhik or 1})
+            -- self.LHIKTimeline = {}
+            local timeline = {}
+            local animTimeline = anim.LHIKTimeline
+            for i = 1, #animTimeline do
+                timeline[i] = animTimeline[i]
             end
+
+            self.LHIKTimeline = timeline
         else
+            local lhikInDefault = anim.LHIKIn or 0.1
+            local lhikOutDefault = anim.LHIKOut or 0.1
+
             self.LHIKTimeline = {
-                {t = -math.huge, lhik = 1},
-                {t = ((anim.LHIKIn or 0.1) - (anim.LHIKEaseIn or anim.LHIKIn or 0.1)) * mult, lhik = 1},
-                {t = (anim.LHIKIn or 0.1) * mult, lhik = 0},
-                {t = ttime - ((anim.LHIKOut or 0.1) * mult), lhik = 0},
-                {t = ttime - (((anim.LHIKOut or 0.1) - (anim.LHIKEaseOut or anim.LHIKOut or 0.1)) * mult), lhik = 1},
-                {t = math.huge, lhik = 1}
+                {t = minf, lhik = 1},
+                {t = (lhikInDefault - (anim.LHIKEaseIn or lhikInDefault)) * mult, lhik = 1},
+                {t = lhikInDefault * mult, lhik = 0},
+                {t = ttime - (lhikOutDefault * mult), lhik = 0},
+                {t = ttime - ((lhikOutDefault - (anim.LHIKEaseOut or lhikOutDefault)) * mult), lhik = 1},
+                {t = inf, lhik = 1}
             }
 
             if anim.LHIKIn == 0 then
-                self.LHIKTimeline[1].lhik = -math.huge
-                self.LHIKTimeline[2].lhik = -math.huge
+                self.LHIKTimeline[1].lhik = minf
+                self.LHIKTimeline[2].lhik = minf
             end
 
             if anim.LHIKOut == 0 then
-                self.LHIKTimeline[#self.LHIKTimeline - 1].lhik = math.huge
-                self.LHIKTimeline[#self.LHIKTimeline].lhik = math.huge
+                local len = #self.LHIKTimeline
+                self.LHIKTimeline[len - 1].lhik = inf
+                self.LHIKTimeline[len].lhik = inf
             end
         end
     else
@@ -182,22 +203,22 @@ function SWEP:PlayAnimation(key, mult, pred, startfrom, tt, skipholster, priorit
     end
 
     if anim.TPAnim then
-        local aseq = self:GetOwner():SelectWeightedSequence(anim.TPAnim)
+        local aseq = owner:SelectWeightedSequence(anim.TPAnim)
         if aseq then
-            self:GetOwner():AddVCDSequenceToGestureSlot( GESTURE_SLOT_ATTACK_AND_RELOAD, aseq, anim.TPAnimStartTime or 0, true )
-            if !game.SinglePlayer() and SERVER then
+            owner:AddVCDSequenceToGestureSlot( GESTURE_SLOT_ATTACK_AND_RELOAD, aseq, anim.TPAnimStartTime or 0, true )
+            if !isSingleplayer and SERVER then
                 net.Start("arccw_networktpanim")
-                    net.WriteEntity(self:GetOwner())
+                    net.WriteEntity(owner)
                     net.WriteUInt(aseq, 16)
                     net.WriteFloat(anim.TPAnimStartTime or 0)
-                net.SendPVS(self:GetOwner():GetPos())
+                net.SendPVS(owner:GetPos())
             end
         end
     end
 
-    if !(game.SinglePlayer() and CLIENT) then
+    if not (isSingleplayer and CLIENT) then
         -- self.EventTable = {}
-        if game.SinglePlayer() or (!game.SinglePlayer() and IsFirstTimePredicted()) then
+        if isSingleplayer or (!isSingleplayer and isFirstTimePredicted) then
             self:PlaySoundTable(anim.SoundTable or {}, 1 / mult, startfrom, key)
         end
     end
@@ -218,7 +239,7 @@ function SWEP:PlayAnimation(key, mult, pred, startfrom, tt, skipholster, priorit
         self.Cam_Offset_Ang = Angle(ang)
     end
 
-    self:SetNextIdle(CurTime() + ttime)
+    self:SetNextIdle(now + ttime)
 
     return true
 end
