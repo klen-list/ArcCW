@@ -877,17 +877,31 @@ function SWEP:IsProne()
 end
 
 -- BarrelHitWall is known to cause viewmodel flickering on certain playermodels if called during VM position function (a270cc9)
-local hitwallcache
+local hitwallcache = {0, 0}
+local overrideNearWall = GetConVar("arccw_override_nearwall")
+
+local traceLineResultTab = {}
+
+local traceLineTab = {
+    mask = MASK_SOLID,
+    output = traceLineResultTab,
+}
+
+
 function SWEP:BarrelHitWall()
 
     local len = self:GetBuff("BarrelLength")
-    if len == 0 or !GetConVar("arccw_override_nearwall"):GetBool()
-            or (vrmod and vrmod.IsPlayerInVR(self:GetOwner()))
-            or (self:GetOwner():IsPlayer() and self:GetOwner():InVehicle()) then
-        hitwallcache = {0, CurTime()}
+    local owner = self:GetOwner()
+    local curTime = CurTime()
+
+    if len == 0 or !overrideNearWall:GetBool()
+            or (vrmod and vrmod.IsPlayerInVR(owner))
+            or (owner:IsPlayer() and owner:InVehicle()) then
+        hitwallcache[1] = 0
+        hitwallcache[2] = curTime
     end
 
-    if !hitwallcache or hitwallcache[2] ~= CurTime() then
+    if !hitwallcache or hitwallcache[2] ~= curTime then
 
         local offset = self:GetBuff("BarrelOffsetHip")
 
@@ -895,8 +909,8 @@ function SWEP:BarrelHitWall()
             offset = LerpVector(self:GetSightDelta(), self:GetBuff("BarrelOffsetSighted"), offset)
         end
 
-        local dir = self:GetOwner():EyeAngles()
-        local src = self:GetOwner():EyePos()
+        local dir = owner:EyeAngles()
+        local src = owner:EyePos()
         local r, f, u = dir:Right(), dir:Forward(), dir:Up()
 
         for i = 1, 3 do
@@ -906,23 +920,28 @@ function SWEP:BarrelHitWall()
                     + u[i] * offset[3]
         end
 
-        local filter = {self:GetOwner()}
+        local filter = {owner}
 
         table.Add(filter, self.Shields)
 
-        local tr = util.TraceLine({
-            start = src,
-            endpos = src + (f * len),
-            filter = filter,
-            mask = MASK_SOLID
-        })
+        f:Mul(len)
+        f:Add(src) -- equals src + (f*len)
+
+        traceLineTab.start = src
+        traceLineTab.endpos = f
+        traceLineTab.filter = filter
+
+        util.TraceLine(traceLineTab)
+
+        local tr = traceLineResultTab
 
         if tr.Hit and !tr.Entity.ArcCWProjectile then
             --local l = (tr.HitPos - src):Length()
-            --hitwallcache = {math.Clamp(1 - l / len, 0, 1), CurTime()}
-            hitwallcache = {1 - tr.Fraction, CurTime()}
+            --hitwallcache = {math.Clamp(1 - l / len, 0, 1), curTime}
+            hitwallcache[1] = 1-tr.Fraction
         else
-            hitwallcache = {0, CurTime()}
+            hitwallcache[1] = 0
+            hitwallcache[2] = curTime
         end
     end
 
