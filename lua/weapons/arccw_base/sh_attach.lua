@@ -236,9 +236,10 @@ do
         local hooks = self.AttCache_Hooks[buff]
         for i = 1, #hooks do
             local ret = hooks[i][1](self, data)
-            if ret == false then
-                return
-            elseif ret != nil then
+            if ret ~= nil then
+                if ret == false then
+                    return
+                end
                 retvalue = ret
                 break
             end
