@@ -112,24 +112,36 @@ function SWEP:GetIsManualAction()
 end
 
 -- ONE FUNCTION TO RULE THEM ALL
-function SWEP:GetBuff(buff, defaultnil, defaultvar)
-    local stable = self:GetTable()
+local getmetatable = getmetatable
 
-    local result = stable[buff] or defaultvar
-    if !result and defaultnil then
-        result = nil
-    elseif !result then
-        result = 1
+do
+    local numberMeta = getmetatable(0)
+    if not numberMeta then
+        numberMeta = {MetaName = 'number'}
+        debug.setmetatable(0, numberMeta)
     end
 
-    result = self:GetBuff_Override("Override_" .. buff, result)
-
-    if isnumber(result) then
-        result = self:GetBuff_Add("Add_" .. buff) + result
-        result = self:GetBuff_Mult("Mult_" .. buff) * result
+    local function isnumber(val)
+        return getmetatable(val) == numberMeta
     end
 
-    return result
+    function SWEP:GetBuff(buff, defaultnil, defaultvar)
+        local result = self[buff] or defaultvar
+        if !result and defaultnil then
+            result = nil
+        elseif !result then
+            result = 1
+        end
+    
+        result = self:GetBuff_Override("Override_" .. buff, result)
+    
+        if isnumber(result) then
+            result = self:GetBuff_Add("Add_" .. buff) + result
+            result = self:GetBuff_Mult("Mult_" .. buff) * result
+        end
+    
+        return result
+    end
 end
 
 function SWEP:GetBuff_Stat(buff, slot)
@@ -152,7 +164,6 @@ do
     end
 
     local blank = function() end
-    local getmetatable = getmetatable
 
     local functionMeta = getmetatable(blank)
     if not functionMeta then
