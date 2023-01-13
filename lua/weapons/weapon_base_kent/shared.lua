@@ -247,20 +247,26 @@ end
 function SWEP:OwnerChanged()
 end
 
---[[---------------------------------------------------------
-	Name: Ammo1
-	Desc: Returns how much of ammo1 the player has
------------------------------------------------------------]]
-function SWEP:Ammo1()
-	return self:GetOwner():GetAmmoCount(self:GetPrimaryAmmoType())
-end
+do
+	local playerGetAmmoCount = FindMetaTable("Player").GetAmmoCount
 
---[[---------------------------------------------------------
-	Name: Ammo2
-	Desc: Returns how much of ammo2 the player has
------------------------------------------------------------]]
-function SWEP:Ammo2()
-	return self:GetOwner():GetAmmoCount(self:GetSecondaryAmmoType())
+	--[[---------------------------------------------------------
+		Name: Ammo1
+		Desc: Returns how much of ammo1 the player has
+		-- !!!
+	-----------------------------------------------------------]]
+	function SWEP:Ammo1()
+		return playerGetAmmoCount(self:GetOwner(), self:GetPrimaryAmmoType())
+	end
+	
+	--[[---------------------------------------------------------
+		Name: Ammo2
+		Desc: Returns how much of ammo2 the player has
+		-- !!!
+	-----------------------------------------------------------]]
+	function SWEP:Ammo2()
+		return playerGetAmmoCount(self:GetOwner(), self:GetSecondaryAmmoType())
+	end
 end
 
 --[[---------------------------------------------------------

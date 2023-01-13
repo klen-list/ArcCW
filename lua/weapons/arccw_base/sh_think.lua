@@ -11,11 +11,18 @@ local ang0 = Angle(0, 0, 0)
 
 local lastUBGL = 0
 
+local min, max = math.min, math.max
+local function clamp(_in, low, high)
+    return min(max(_in, low), high)
+end
+
 do
     local playerKeyPressed = PLAYER.KeyPressed
     local playerKeyDown = PLAYER.KeyDown
     local playerKeyReleased = PLAYER.KeyReleased
     local playerGetViewModel = PLAYER.GetViewModel
+    local playerGetInfoNum = PLAYER.GetInfoNum
+    local playerSetAmmo = PLAYER.SetAmmo
 
     local sp_cl = isSingleplayer and CLIENT
 
@@ -164,7 +171,7 @@ do
             end
         end
     
-        if owner and owner:GetInfoNum("arccw_automaticreload", 0) == 1 and self:Clip1() == 0 and !self:GetReloading() and now > self:GetNextPrimaryFire() + 0.2 then
+        if owner and playerGetInfoNum(owner, "arccw_automaticreload", 0) == 1 and self:Clip1() == 0 and !self:GetReloading() and now > self:GetNextPrimaryFire() + 0.2 then
             self:Reload()
         end
     
@@ -182,7 +189,7 @@ do
         else
     
             -- no it really doesn't, past me
-            local toggle = owner:GetInfoNum("arccw_toggleads", 0) >= 1
+            local toggle = playerGetInfoNum(owner, "arccw_toggleads", 0) >= 1
             local suitzoom = playerKeyDown(owner, IN_ZOOM)
     
             -- if in singleplayer, client realm should be completely ignored
@@ -264,9 +271,12 @@ do
             self:DoOurViewPunch()
         end
     
-        if self.Throwing and self:Clip1() == 0 and self:Ammo1() > 0 then
+        local ammo1 = self:Ammo1()
+        local clip1 = self:Clip1() 
+        if self.Throwing and clip1 == 0 and ammo1 > 0 then
             self:SetClip1(1)
-            owner:SetAmmo(self:Ammo1() - 1, self.Primary.Ammo)
+            clip1 = 1
+            playerSetAmmo(owner, ammo1 - 1, self.Primary.Ammo)
         end
     
         -- self:RefreshBGs()
@@ -277,7 +287,7 @@ do
         end
     
         local bottomlessClip = self:HasBottomlessClip()
-        local clip1 = self:Clip1() 
+        
         if bottomlessClip and clip1 != ArcCW.BottomlessMagicNumber then
             self:Unload()
             self:SetClip1(ArcCW.BottomlessMagicNumber)
@@ -299,8 +309,8 @@ do
         --end
     
         -- Only reset to idle if we don't need cycle. empty idle animation usually doesn't play nice
-        if swepDt.NextIdle != 0 and swepDt.NextIdle <= now and !self:GetNeedCycle()
-                and self:GetHolster_Time() == 0 and swepDt.ShotgunReloading == 0 then
+        if swepDt.NextIdle != 0 and swepDt.NextIdle <= now and not swepDt.NeedCycle
+                and swepDt.Holster_Time == 0 and swepDt.ShotgunReloading == 0 then
             self:SetNextIdle(0)
             self:PlayIdleAnimation(true)
         end
@@ -413,7 +423,7 @@ do
     local nonSprintKeys = IN_FORWARD + IN_MOVELEFT + IN_MOVERIGHT + IN_BACK
     function SWEP:InSprint()
         local owner = self:GetOwner()
-        local sm = math.Clamp(self.SpeedMult * self:GetBuff_Mult("Mult_SpeedMult") * self:GetBuff_Mult("Mult_MoveSpeed"), 0, 1)
+        local sm = clamp(self.SpeedMult * self:GetBuff_Mult("Mult_SpeedMult") * self:GetBuff_Mult("Mult_MoveSpeed"), 0, 1)
 
         local sprintspeed = playerGetRunSpeed(owner) * sm
         local walkspeed = playerGetWalkSpeed(owner) * sm
@@ -449,22 +459,30 @@ do
     end
 end
 
-function SWEP:IsTriggerHeld()
-    return self:GetOwner():KeyDown(IN_ATTACK) and (self:CanShootWhileSprint() or (!self.Sprinted or self:GetState() != ArcCW.STATE_SPRINT)) and (self:GetHolster_Time() < CurTime()) and !self:GetPriorityAnim()
+do
+    local playerKeyDown = PLAYER.KeyDown
+
+    function SWEP:IsTriggerHeld()
+        return playerKeyDown(self:GetOwner(), IN_ATTACK) 
+            and (not self.Sprinted or self:CanShootWhileSprint() or self:GetState() ~= ArcCW.STATE_SPRINT) 
+            and (self.dt.Holster_Time < CurTime()) 
+            and not self:GetPriorityAnim()
+    end
 end
 
 SWEP.LastTriggerTime = 0
 SWEP.LastTriggerDuration = 0
 function SWEP:GetTriggerDelta(noheldcheck)
     if self.LastTriggerTime <= 0 or (!noheldcheck and !self:IsTriggerHeld()) then return 0 end
-    return math.Clamp((CurTime() - self.LastTriggerTime) / self.LastTriggerDuration, 0, 1)
+    return clamp((CurTime() - self.LastTriggerTime) / self.LastTriggerDuration, 0, 1)
 end
 
 function SWEP:DoTriggerDelay()
     local shouldHold = self:IsTriggerHeld()
-
+    local now = CurTime()
     local reserve = self:HasBottomlessClip() and self:Ammo1() or self:Clip1()
-    if self.LastTriggerTime == -1 or (!self.TriggerPullWhenEmpty and (reserve < self:GetBuff("AmmoPerShot"))) and self:GetNextPrimaryFire() < CurTime() then
+    local canShoot = self:GetNextPrimaryFire() < now
+    if self.LastTriggerTime == -1 or (!self.TriggerPullWhenEmpty and (reserve < self:GetBuff("AmmoPerShot"))) and canShoot then
         if !shouldHold then
             self.LastTriggerTime = 0 -- Good to fire again
             self.LastTriggerDuration = 0
@@ -475,7 +493,7 @@ function SWEP:DoTriggerDelay()
     if self:GetBurstCount() > 0 and self:GetCurrentFiremode().Mode == 1 then
         self.LastTriggerTime = -1 -- Cannot fire again until trigger released
         self.LastTriggerDuration = 0
-    elseif self:GetNextPrimaryFire() < CurTime() and self.LastTriggerTime > 0 and !shouldHold then
+    elseif canShoot and self.LastTriggerTime > 0 and !shouldHold then
         -- Attack key is released. Stop the animation and clear progress
         local anim = self:SelectAnimation("untrigger")
         if anim then
@@ -484,11 +502,11 @@ function SWEP:DoTriggerDelay()
         self.LastTriggerTime = 0
         self.LastTriggerDuration = 0
         self:GetBuff_Hook("Hook_OnTriggerRelease")
-    elseif self:GetNextPrimaryFire() < CurTime() and self.LastTriggerTime == 0 and shouldHold then
+    elseif canShoot and self.LastTriggerTime == 0 and shouldHold then
         -- We haven't played the animation yet. Pull it!
         local anim = self:SelectAnimation("trigger")
         self:PlayAnimation(anim, self:GetBuff_Mult("Mult_TriggerDelayTime"), true, 0, nil, nil, true) -- need to overwrite sprint up
-        self.LastTriggerTime = CurTime()
+        self.LastTriggerTime = now
         self.LastTriggerDuration = self:GetAnimKeyTime(anim, true) * self:GetBuff_Mult("Mult_TriggerDelayTime")
         self:GetBuff_Hook("Hook_OnTriggerHeld")
     end
