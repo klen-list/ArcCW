@@ -112,24 +112,36 @@ function SWEP:GetIsManualAction()
 end
 
 -- ONE FUNCTION TO RULE THEM ALL
-function SWEP:GetBuff(buff, defaultnil, defaultvar)
-    local stable = self:GetTable()
+local getmetatable = getmetatable
 
-    local result = stable[buff] or defaultvar
-    if !result and defaultnil then
-        result = nil
-    elseif !result then
-        result = 1
+do
+    local numberMeta = getmetatable(0)
+    if not numberMeta then
+        numberMeta = {MetaName = 'number'}
+        debug.setmetatable(0, numberMeta)
     end
 
-    result = self:GetBuff_Override("Override_" .. buff, result)
-
-    if isnumber(result) then
-        result = self:GetBuff_Add("Add_" .. buff) + result
-        result = self:GetBuff_Mult("Mult_" .. buff) * result
+    local function isnumber(val)
+        return getmetatable(val) == numberMeta
     end
 
-    return result
+    function SWEP:GetBuff(buff, defaultnil, defaultvar)
+        local result = self[buff] or defaultvar
+        if !result and defaultnil then
+            result = nil
+        elseif !result then
+            result = 1
+        end
+    
+        result = self:GetBuff_Override("Override_" .. buff, result)
+    
+        if isnumber(result) then
+            result = self:GetBuff_Add("Add_" .. buff) + result
+            result = self:GetBuff_Mult("Mult_" .. buff) * result
+        end
+    
+        return result
+    end
 end
 
 function SWEP:GetBuff_Stat(buff, slot)
@@ -152,7 +164,6 @@ do
     end
 
     local blank = function() end
-    local getmetatable = getmetatable
 
     local functionMeta = getmetatable(blank)
     if not functionMeta then
@@ -183,14 +194,16 @@ do
                 if !atttbl then continue end
                 local tblBuff = atttbl[buff]
 
-                local toggleNumStats = atttbl.ToggleStats[k.ToggleNum]
-
-                if isfunction(tblBuff) then
-                    buffHooksLen = buffHooksLen + 1
-                    buffHooks[buffHooksLen] = {tblBuff, atttbl[buffConcPriority] or 0}
-                elseif atttbl.ToggleStats and k.ToggleNum and toggleNumStats and isfunction(toggleNumStats[buff]) then
-                    buffHooksLen = buffHooksLen + 1
-                    buffHooks[buffHooksLen] = {toggleNumStats[buff], toggleNumStats[buffConcPriority] or 0}
+                if k.ToggleNum and atttbl.ToggleStats then                    
+                    local toggleNumStats = atttbl.ToggleStats[k.ToggleNum]
+    
+                    if isfunction(tblBuff) then
+                        buffHooksLen = buffHooksLen + 1
+                        buffHooks[buffHooksLen] = {tblBuff, atttbl[buffConcPriority] or 0}
+                    elseif atttbl.ToggleStats and k.ToggleNum and toggleNumStats and isfunction(toggleNumStats[buff]) then
+                        buffHooksLen = buffHooksLen + 1
+                        buffHooks[buffHooksLen] = {toggleNumStats[buff], toggleNumStats[buffConcPriority] or 0}
+                    end
                 end
             end
 
@@ -493,9 +506,9 @@ do
 
         if ArcCW.ConVar_BuffMults[buff] then
             if buff == "Mult_CycleTime" then
-                mult = mult / multCvar
+                mult = mult / cvarGetFloat(GetConVar(ArcCW.ConVar_BuffMults[buff]))
             else
-                mult = mult * multCvar
+                mult = mult * cvarGetFloat(GetConVar(ArcCW.ConVar_BuffMults[buff]))
             end
         end
 
@@ -655,48 +668,69 @@ function SWEP:GetActiveElements(recache)
         end
 
         local num = i.ToggleNum or 1
-        if atttbl.ToggleStats and atttbl.ToggleStats[num] and (atttbl.ToggleStats[num]["ActivateElements"] != nil) then
-            local statsActivateElements = atttbl.ToggleStats[num]["ActivateElements"]
-            local statsActivateElementsLen = #activateElements
-
-            for i = 1, statsActivateElementsLen do
-                eles[elesLen + i] = statsActivateElements[i]
+        local toggleStats = atttbl.ToggleStats
+        if toggleStats then
+            local toggleStatsNum = atttbl.ToggleStats[num]
+            if toggleStatsNum and toggleStatsNum.ActivateElements ~= nil then
+                local statsActivateElements = toggleStatsNum.ActivateElements
+                local statsActivateElementsLen = #activateElements
+    
+                for i = 1, statsActivateElementsLen do
+                    eles[elesLen + i] = statsActivateElements[i]
+                end
+                elesLen = elesLen + statsActivateElementsLen
             end
-            elesLen = elesLen + statsActivateElementsLen
         end
 
         local slots = atttbl.Slot
 
         if isstring(slots) then
-            slots = {slots}
+            elesLen = elesLen + 1
+            eles[elesLen] = slots
         end
 
-        table.Add(eles, slots or {})
-
-        table.insert(eles, i.Installed)
+        elesLen = elesLen + 1
+        eles[elesLen] = i.Installed
     end
 
-    table.Add(eles, self.DefaultElements)
+    local defaultElements = self.DefaultElements
+    local defaultElementsLen = #defaultElements
+
+    for i = 1, defaultElementsLen do
+        eles[elesLen + i] = defaultElements[i]
+    end
+    elesLen = elesLen + defaultElementsLen
 
     local mode = self:GetCurrentFiremode()
-    table.Add(eles, (mode or {}).ActivateElements or {})
+    if mode and mode.ActivateElements then
+        local activateElements = mode.ActivateElements
+        local activateElementsLen = #activateElements
+
+        for i = 1, activateElementsLen do
+            eles[elesLen + i] = activateElements[i]
+        end
+        elesLen = elesLen + activateElementsLen
+    end
 
     local eles2 = {}
+    local eles2Len = 0
 
     ArcCW.Overflow = true
 
-    for f, i in pairs(eles) do
-        local e = self.AttachmentElements[i]
+    local attachmentElements = self.AttachmentElements
+    -- for f, i in ipairs(eles) do
+    for f = 1, elesLen do
+        local elesElement = eles[i]
+        local e = attachmentElements[elesElement]
 
-        if !e then continue end
-
-        if !self:CheckFlags(e.ExcludeFlags, e.RequireFlags) then continue end
+        if not e then continue end
+        if not self:CheckFlags(e.ExcludeFlags, e.RequireFlags) then continue end
 
         local a = false
         local c = 0
 
-        for g = f, table.Count(eles) do
-            if eles[g] == i then c = c + 1 end
+        for g = f, elesLen do
+            if eles[g] == elesElement then c = c + 1 end
             if a then continue end
 
             if c > 1 then a = true end
@@ -704,15 +738,19 @@ function SWEP:GetActiveElements(recache)
 
         if a then continue end
 
-        table.insert(eles2, i)
+        eles2Len = eles2Len + 1
+        eles2[eles2Len] = elesElement
     end
 
-    table.Add(eles2, self:GetWeaponFlags())
+    local flags = self:GetWeaponFlags()
+    local flagsLen = #flags
+    for i = 1, flagsLen do
+        eles2[eles2Len + i] = flags[i]
+    end
+    eles2Len = eles2Len + flagsLen
 
     ArcCW.Overflow = false
-
     self.ActiveElementCache = eles2
-
     return eles2
 end
 
