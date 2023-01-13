@@ -16,6 +16,8 @@ do
     local playerKeyDown = PLAYER.KeyDown
     local playerKeyReleased = PLAYER.KeyReleased
     local playerGetViewModel = PLAYER.GetViewModel
+    local playerGetInfoNum = PLAYER.GetInfoNum
+    local playerSetAmmo = PLAYER.SetAmmo
 
     local sp_cl = isSingleplayer and CLIENT
 
@@ -164,7 +166,7 @@ do
             end
         end
     
-        if owner and owner:GetInfoNum("arccw_automaticreload", 0) == 1 and self:Clip1() == 0 and !self:GetReloading() and now > self:GetNextPrimaryFire() + 0.2 then
+        if owner and playerGetInfoNum(owner, "arccw_automaticreload", 0) == 1 and self:Clip1() == 0 and !self:GetReloading() and now > self:GetNextPrimaryFire() + 0.2 then
             self:Reload()
         end
     
@@ -182,7 +184,7 @@ do
         else
     
             -- no it really doesn't, past me
-            local toggle = owner:GetInfoNum("arccw_toggleads", 0) >= 1
+            local toggle = playerGetInfoNum(owner, "arccw_toggleads", 0) >= 1
             local suitzoom = playerKeyDown(owner, IN_ZOOM)
     
             -- if in singleplayer, client realm should be completely ignored
@@ -264,9 +266,12 @@ do
             self:DoOurViewPunch()
         end
     
-        if self.Throwing and self:Clip1() == 0 and self:Ammo1() > 0 then
+        local ammo1 = self:Ammo1()
+        local clip1 = self:Clip1() 
+        if self.Throwing and clip1 == 0 and ammo1 > 0 then
             self:SetClip1(1)
-            owner:SetAmmo(self:Ammo1() - 1, self.Primary.Ammo)
+            clip1 = 1
+            playerSetAmmo(owner, ammo1 - 1, self.Primary.Ammo)
         end
     
         -- self:RefreshBGs()
@@ -277,7 +282,7 @@ do
         end
     
         local bottomlessClip = self:HasBottomlessClip()
-        local clip1 = self:Clip1() 
+        
         if bottomlessClip and clip1 != ArcCW.BottomlessMagicNumber then
             self:Unload()
             self:SetClip1(ArcCW.BottomlessMagicNumber)
@@ -299,8 +304,8 @@ do
         --end
     
         -- Only reset to idle if we don't need cycle. empty idle animation usually doesn't play nice
-        if swepDt.NextIdle != 0 and swepDt.NextIdle <= now and !self:GetNeedCycle()
-                and self:GetHolster_Time() == 0 and swepDt.ShotgunReloading == 0 then
+        if swepDt.NextIdle != 0 and swepDt.NextIdle <= now and not swepDt.NeedCycle
+                and swepDt.Holster_Time == 0 and swepDt.ShotgunReloading == 0 then
             self:SetNextIdle(0)
             self:PlayIdleAnimation(true)
         end
