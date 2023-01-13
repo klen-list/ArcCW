@@ -399,36 +399,54 @@ function SWEP:ProcessRecoil()
     lst = SysTime()
 end
 
-function SWEP:InSprint()
-    local owner = self:GetOwner()
+do
+    local playerGetRunSpeed = PLAYER.GetRunSpeed
+    local playerGetWalkSpeed = PLAYER.GetWalkSpeed
+    local playerKeyDown = PLAYER.KeyDown
+    local playerCrouching = PLAYER.Crouching
 
-    local sm = self.SpeedMult * self:GetBuff_Mult("Mult_SpeedMult") * self:GetBuff_Mult("Mult_MoveSpeed")
+    local ENTITY = FindMetaTable("Entity")
+    local entityGetVelocity = ENTITY.GetVelocity
+    local entityOnGround = ENTITY.OnGround
+    local vectorGetLengthSqr  = FindMetaTable("Vector").LengthSqr
 
-    sm = math.Clamp(sm, 0, 1)
+    local nonSprintKeys = IN_FORWARD + IN_MOVELEFT + IN_MOVERIGHT + IN_BACK
+    function SWEP:InSprint()
+        local owner = self:GetOwner()
+        local sm = math.Clamp(self.SpeedMult * self:GetBuff_Mult("Mult_SpeedMult") * self:GetBuff_Mult("Mult_MoveSpeed"), 0, 1)
 
-    local sprintspeed = owner:GetRunSpeed() * sm
-    local walkspeed = owner:GetWalkSpeed() * sm
+        local sprintspeed = playerGetRunSpeed(owner) * sm
+        local walkspeed = playerGetWalkSpeed(owner) * sm
 
-    local curspeed = owner:GetVelocity():Length()
+        local curspeed = vectorGetLengthSqr(entityGetVelocity(owner))
 
-    if TTT2 and owner.isSprinting == true then
-        return (owner.sprintProgress or 0) > 0 and owner:KeyDown(IN_SPEED) and !owner:Crouching() and curspeed > walkspeed and owner:OnGround()
-    end
+        local ownerCrouching = playerCrouching(self)
+        local ownerOnGround = entityOnGround(owner)
 
-    if !owner:KeyDown(IN_SPEED) or !owner:KeyDown(IN_FORWARD+IN_MOVELEFT+IN_MOVERIGHT+IN_BACK) then return false end
-    if !owner:OnGround() then return false end
-    if owner:Crouching() then return false end
-    if curspeed < Lerp(0.5, walkspeed, sprintspeed) then
-        -- provide some grace time so changing directions won't immediately exit sprint
-        self.LastExitSprintCheck = self.LastExitSprintCheck or CurTime()
-        if self.LastExitSprintCheck < CurTime() - 0.25 then
-            return false
+        if TTT2 and owner.isSprinting == true then
+            return (owner.sprintProgress or 0) > 0 and playerKeyDown(owner, IN_SPEED) and not ownerCrouching and curspeed > walkspeed*walkspeed and ownerOnGround
         end
-    else
-        self.LastExitSprintCheck = nil
-    end
 
-    return true
+        if ownerCrouching then return false end
+        if not ownerOnGround then return false end
+        if not playerKeyDown(owner, IN_SPEED) or not playerKeyDown(owner, nonSprintKeys) then return false end
+        
+        local lerpSpeed = Lerp(0.5, walkspeed, sprintspeed)
+        if curspeed < lerpSpeed*lerpSpeed then
+            local now = CurTime()
+            -- provide some grace time so changing directions won't immediately exit sprint
+            local lastExitSprintCheck = self.LastExitSprintCheck or now
+            self.LastExitSprintCheck = lastExitSprintCheck
+
+            if lastExitSprintCheck < now - 0.25 then
+                return false
+            end
+        else
+            self.LastExitSprintCheck = nil
+        end
+
+        return true
+    end
 end
 
 function SWEP:IsTriggerHeld()
