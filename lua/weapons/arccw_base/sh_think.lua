@@ -420,7 +420,7 @@ do
 
         local curspeed = vectorGetLengthSqr(entityGetVelocity(owner))
 
-        local ownerCrouching = playerCrouching(self)
+        local ownerCrouching = playerCrouching(owner)
         local ownerOnGround = entityOnGround(owner)
 
         if TTT2 and owner.isSprinting == true then
