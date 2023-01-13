@@ -2,46 +2,58 @@ SWEP.Cam_Offset_Ang = Angle(0, 0, 0)
 
 local isSingleplayer = game.SinglePlayer()
 
-function SWEP:SelectAnimation(anim)
-    if self:GetNWState() == ArcCW.STATE_SIGHTS and self.Animations[anim .. "_iron"] then
-        anim = anim .. "_iron"
+do
+    local cvarArccwNoinspect = GetConVar("arccw_noinspect")
+    local cvarGetBool = FindMetaTable("ConVar").GetBool
+
+    local playerGetInfoNum = FindMetaTable("Player").GetInfoNum
+    
+    -- I hate this function
+    function SWEP:SelectAnimation(anim)
+        local nwState = self.dt.NWState
+        local animations = self.Animations
+    
+        if nwState == ArcCW.STATE_SIGHTS then
+            if animations[anim .. "_iron"] then
+                anim = anim .. "_iron"
+            end
+            if animations[anim .. "_sights"] then
+                anim = anim .. "_sights"
+            end
+            if animations[anim .. "_sight"] then
+                anim = anim .. "_sight"
+            end
+        elseif nwState == ArcCW.STATE_SPRINT and animations[anim .. "_sprint"] and not self:CanShootWhileSprint() then
+            anim = anim .. "_sprint"
+        end
+    
+        if animations[anim .. "_bipod"] and self:InBipod() then
+            anim = anim .. "_bipod"
+        end
+    
+        if nwState == ArcCW.STATE_CUSTOMIZE and animations[anim .. "_inspect"]
+            and ((CLIENT and not cvarGetBool(cvarArccwNoinspect))
+            or (SERVER and playerGetInfoNum(self:GetOwner(), "arccw_noinspect", 0))) 
+        then
+            anim = anim .. "_inspect"
+        end
+    
+        if (self:Clip1() == 0 or (self:HasBottomlessClip() and self:Ammo1() == 0)) and animations[anim .. "_empty"] then
+            anim = anim .. "_empty"
+        end
+    
+        if self:GetMalfunctionJam() and animations[anim .. "_jammed"] then
+            anim = anim .. "_jammed"
+        end
+    
+        if self:GetBuff_Override("Override_TriggerDelay", self.TriggerDelay) and self:IsTriggerHeld() and animations[anim .. "_trigger"] then
+            anim = anim .. "_trigger"
+        end
+    
+        if not animations[anim] then return end
+    
+        return anim
     end
-
-    if self:GetNWState() == ArcCW.STATE_SIGHTS and self.Animations[anim .. "_sights"] then
-        anim = anim .. "_sights"
-    end
-
-    if self:GetNWState() == ArcCW.STATE_SIGHTS and self.Animations[anim .. "_sight"] then
-        anim = anim .. "_sight"
-    end
-
-    if self:GetNWState() == ArcCW.STATE_SPRINT and self.Animations[anim .. "_sprint"] and !self:CanShootWhileSprint() then
-        anim = anim .. "_sprint"
-    end
-
-    if self:InBipod() and self.Animations[anim .. "_bipod"] then
-        anim = anim .. "_bipod"
-    end
-
-    if self:GetState() == ArcCW.STATE_CUSTOMIZE and self.Animations[anim .. "_inspect"] and ((CLIENT and !GetConVar("arccw_noinspect"):GetBool()) or (SERVER and self:GetOwner():GetInfoNum("arccw_noinspect", 0))) then
-        anim = anim .. "_inspect"
-    end
-
-    if (self:Clip1() == 0 or (self:HasBottomlessClip() and self:Ammo1() == 0)) and self.Animations[anim .. "_empty"] then
-        anim = anim .. "_empty"
-    end
-
-    if self:GetMalfunctionJam() and self.Animations[anim .. "_jammed"] then
-        anim = anim .. "_jammed"
-    end
-
-    if self:GetBuff_Override("Override_TriggerDelay", self.TriggerDelay) and self:IsTriggerHeld() and self.Animations[anim .. "_trigger"] then
-        anim = anim .. "_trigger"
-    end
-
-    if !self.Animations[anim] then return end
-
-    return anim
 end
 
 SWEP.LastAnimStartTime = 0
